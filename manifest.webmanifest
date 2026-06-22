@@ -1,0 +1,16 @@
+{
+  "name": "Norway Fjords Roadtrip",
+  "short_name": "Norway '26",
+  "description": "Interactive map & day-by-day itinerary for a 12-day campervan trip through the western Norwegian fjords, July 2026.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a1318",
+  "theme_color": "#0a1318",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

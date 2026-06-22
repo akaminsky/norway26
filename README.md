@@ -26,6 +26,10 @@ Then open **http://localhost:8000/**
 
 Needs an internet connection for map tiles, weather, and the React/Leaflet CDNs. Everything else (edits, trip logs, photos) works offline and persists in the browser.
 
+## Install on your phone
+
+It's a PWA. On iPhone: open the site in Safari → **Share → Add to Home Screen**. It launches full-screen (no browser chrome) with its own icon, like a native app. (Android/Chrome: **⋮ → Install app**.)
+
 ## Tech
 
 Single `index.html` — React 18 + Leaflet (via CDN), no build step.
