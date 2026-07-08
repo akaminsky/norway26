@@ -54,6 +54,33 @@
 <body>
 <div id="root"></div>
 
+<script>
+/* Register the service worker and auto-reload when a new deploy activates.
+   This is what makes the home-screen (PWA) app pick up updates instead of
+   showing a stale cached version. */
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+  var hadController = !!navigator.serviceWorker.controller;
+  var refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    // A new SW took control (new version). Reload once to run it — but not on the
+    // very first install (when there was no controller yet), to avoid a needless reload.
+    if (refreshing || !hadController) return;
+    refreshing = true;
+    location.reload();
+  });
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+      reg.update();
+      // Re-check for a new version whenever the app is reopened / refocused.
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') reg.update();
+      });
+    }).catch(function () {});
+  });
+})();
+</script>
+
 <script type="text/babel" data-presets="react">
 const { useEffect } = React;
 
