@@ -1,6 +1,6 @@
 # Norway Fjords Roadtrip 🏔️
 
-An interactive, mobile-first visualizer for a 12-day campervan trip through the western Norwegian fjords (**July 17–28, 2026**).
+An interactive, mobile-first visualizer for a 14-day campervan road trip from Amsterdam up through Denmark to the western Norwegian fjords and back (**July 15–28, 2026**).
 
 A hybrid of AllTrails (trail/terrain detail), Polarsteps (day-by-day journey log), and Notion (clean structured info per day) — with a Google-Maps-style bottom-sheet UX.
 
