@@ -232,26 +232,51 @@ class NorwayApp extends React.Component {
     const lats = days.map(d=>d.coord[0]).join(',');
     const lons = days.map(d=>d.coord[1]).join(',');
     const daily = 'temperature_2m_max,temperature_2m_min,weather_code';
-    const fUrl = 'https://api.open-meteo.com/v1/forecast?latitude='+lats+'&longitude='+lons+'&daily='+daily+'&timezone=Europe%2FOslo&start_date=2026-07-17&end_date=2026-07-27';
-    const aUrl = 'https://archive-api.open-meteo.com/v1/archive?latitude='+lats+'&longitude='+lons+'&daily='+daily+'&timezone=Europe%2FOslo&start_date=2025-07-17&end_date=2025-07-27';
+    const tz = 'Europe%2FOslo';
+    // Live forecast: ask for the max 16-day window (never a date-range error). Trip
+    // days inside that window resolve to a real 2026 forecast; the window slides
+    // forward each day, so more of the trip becomes "live" as it approaches.
+    const fUrl = 'https://api.open-meteo.com/v1/forecast?latitude='+lats+'&longitude='+lons+'&daily='+daily+'&timezone='+tz+'&forecast_days=16';
+    // Typical July: average several recent years for the same dates (one hot year
+    // like 2025 is not representative), used only for days the forecast can't reach.
+    const YEARS = [2021,2022,2023,2024];
+    const aUrls = YEARS.map(yr=>'https://archive-api.open-meteo.com/v1/archive?latitude='+lats+'&longitude='+lons+'&daily='+daily+'&timezone='+tz+'&start_date='+yr+'-07-17&end_date='+yr+'-07-28');
     const grab = (url)=>fetch(url).then(r=>r.json()).then(j=>Array.isArray(j)?j:[j]).catch(()=>null);
-    Promise.all([grab(fUrl), grab(aUrl)]).then(([f,a])=>{
+    Promise.all([grab(fUrl)].concat(aUrls.map(grab))).then(res=>{
       this._wxBusy = false;
+      const f = res[0], archives = res.slice(1);
       const out = {};
-      const apply = (arr, yr, source)=>{
+      // 1) Forecast wins where available.
+      if(f){
+        f.forEach((loc, i)=>{
+          const day = days[i]; if(!day || !loc || !loc.daily || !loc.daily.time) return;
+          const idx = loc.daily.time.indexOf('2026-07-'+String(16+day.day)); if(idx<0) return;
+          const hi = loc.daily.temperature_2m_max[idx], lo = loc.daily.temperature_2m_min[idx], code = loc.daily.weather_code[idx];
+          if(hi==null || lo==null) return;
+          const w = this.wmo(code);
+          out[day.day] = {hi:Math.round(hi), lo:Math.round(lo), sky:w.key, label:w.label, source:'forecast'};
+        });
+      }
+      // 2) Multi-year average for the rest.
+      const agg = {};
+      archives.forEach((arr, yi)=>{
         if(!arr) return;
         arr.forEach((loc, i)=>{
           const day = days[i]; if(!day || !loc || !loc.daily || !loc.daily.time) return;
-          const target = yr+'-07-'+String(16+day.day);
-          const idx = loc.daily.time.indexOf(target); if(idx<0) return;
+          const idx = loc.daily.time.indexOf(YEARS[yi]+'-07-'+String(16+day.day)); if(idx<0) return;
           const hi = loc.daily.temperature_2m_max[idx], lo = loc.daily.temperature_2m_min[idx], code = loc.daily.weather_code[idx];
-          if(hi==null || lo==null || out[day.day]) return;
-          const w = this.wmo(code);
-          out[day.day] = {hi:Math.round(hi), lo:Math.round(lo), sky:w.key, label:w.label, source};
+          if(hi==null || lo==null) return;
+          const a = agg[day.day] || (agg[day.day] = {hi:[], lo:[], codes:[]});
+          a.hi.push(hi); a.lo.push(lo); a.codes.push(code);
         });
-      };
-      apply(f, '2026', 'forecast');
-      apply(a, '2025', 'typical');
+      });
+      const mean = xs => xs.reduce((s,x)=>s+x,0)/xs.length;
+      const mode = xs => { const m={}; let best=xs[0], bc=0; xs.forEach(x=>{ m[x]=(m[x]||0)+1; if(m[x]>bc){ bc=m[x]; best=x; } }); return best; };
+      Object.keys(agg).forEach(dnum=>{
+        if(out[dnum]) return;
+        const a = agg[dnum], w = this.wmo(mode(a.codes));
+        out[dnum] = {hi:Math.round(mean(a.hi)), lo:Math.round(mean(a.lo)), sky:w.key, label:w.label, source:'typical'};
+      });
       if(Object.keys(out).length){
         try { localStorage.setItem(this.WKEY, JSON.stringify({t:Date.now(), data:out})); } catch(_){}
         this.setState({weather:out});
