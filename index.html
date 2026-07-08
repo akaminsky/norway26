@@ -381,7 +381,7 @@ class NorwayApp extends React.Component {
     });
   }
   planSig(d){
-    return JSON.stringify({f:d.from,t:d.to,dt:d.drivingTime,dk:d.drivingKm,fe:!!d.ferry,ac:d.accommodation,st:d.status,no:d.notes,acts:(d.activities||[]).map(a=>[a.text,a.type||'',a.desc||'',a.hikeKm||0,a.time||''])});
+    return JSON.stringify({f:d.from,t:d.to,dt:d.drivingTime,dk:d.drivingKm,fe:!!d.ferry,ac:d.accommodation,st:d.status,no:d.notes,me:d.meals?[d.meals.b||'',d.meals.l||'',d.meals.d||'']:[],acts:(d.activities||[]).map(a=>[a.text,a.type||'',a.desc||'',a.hikeKm||0,a.time||''])});
   }
 
   componentDidMount(){
@@ -550,11 +550,13 @@ class NorwayApp extends React.Component {
 
   openEdit = (i)=>{
     const d = this.mergedDays()[i];
-    const draft = {day:d.day, from:d.from, to:d.to, drivingTime:d.drivingTime, drivingKm:d.drivingKm, ferry:!!d.ferry, accommodation:d.accommodation, status:d.status, notes:d.notes, tripLog:d.tripLog, activities:d.activities.map(a=>Object.assign({}, a))};
+    const m = d.meals || {};
+    const draft = {day:d.day, from:d.from, to:d.to, drivingTime:d.drivingTime, drivingKm:d.drivingKm, ferry:!!d.ferry, accommodation:d.accommodation, status:d.status, notes:d.notes, tripLog:d.tripLog, meals:{b:m.b||'', l:m.l||'', d:m.d||''}, activities:d.activities.map(a=>Object.assign({}, a))};
     this.setState({editing:true, editIndex:i, editDraft:draft, geo:{}});
   };
   closeEdit = ()=>{ this.setState({editing:false, editDraft:null, editIndex:null, geo:{}}); };
   setDraft(k, v){ this.setState(s=>({editDraft:Object.assign({}, s.editDraft, {[k]:v})})); }
+  setMeal(k, v){ this.setState(s=>({editDraft:Object.assign({}, s.editDraft, {meals:Object.assign({}, s.editDraft.meals, {[k]:v})})})); }
   setAct(i, k, v){ this.setState(s=>{ const a=s.editDraft.activities.map((x,idx)=>idx===i?Object.assign({}, x, {[k]:v}):x); return {editDraft:Object.assign({}, s.editDraft, {activities:a})}; }); }
   removeAct(i){ this.setState(s=>({editDraft:Object.assign({}, s.editDraft, {activities:s.editDraft.activities.filter((_,idx)=>idx!==i)})})); }
   addAct(){ this.setState(s=>({editDraft:Object.assign({}, s.editDraft, {activities:s.editDraft.activities.concat([{type:'sightseeing', text:'', desc:'', hikeKm:0, time:''}])})})); }
@@ -563,6 +565,7 @@ class NorwayApp extends React.Component {
     const ov = Object.assign({}, this.state.overrides);
     const cur = Object.assign({}, ov[d.day]||{});
     cur.from=d.from; cur.to=d.to; cur.drivingTime=d.drivingTime; cur.drivingKm=Number(d.drivingKm)||0; cur.ferry=!!d.ferry; cur.accommodation=d.accommodation; cur.status=d.status; cur.notes=d.notes; cur.tripLog=d.tripLog;
+    cur.meals = d.meals ? {b:d.meals.b||'', l:d.meals.l||'', d:d.meals.d||''} : {b:'',l:'',d:''};
     cur.activities = d.activities.map(a=>{
       const type = a.type || this.inferType(a);
       const fields = this.typeMeta(type).fields;
@@ -664,6 +667,10 @@ class NorwayApp extends React.Component {
         dayLabel:'Day '+ed.day+' · '+(this.DEFAULTS[ed.day-1].date),
         from:ed.from, to:ed.to, drivingTime:ed.drivingTime, drivingKm:ed.drivingKm, ferry:!!ed.ferry,
         accommodation:ed.accommodation, notes:ed.notes, tripLog:ed.tripLog,
+        mealB:(ed.meals&&ed.meals.b)||'', mealL:(ed.meals&&ed.meals.l)||'', mealD:(ed.meals&&ed.meals.d)||'',
+        onMealB:(e)=>this.setMeal('b', e.target.value),
+        onMealL:(e)=>this.setMeal('l', e.target.value),
+        onMealD:(e)=>this.setMeal('d', e.target.value),
         onFrom:(e)=>this.setDraft('from', e.target.value),
         onTo:(e)=>this.setDraft('to', e.target.value),
         onDrive:(e)=>this.setDraft('drivingTime', e.target.value),
@@ -1135,6 +1142,23 @@ class NorwayApp extends React.Component {
                         <button onClick={Dr.onBooked} style={st(Dr.bookedStyle)}>Booked</button>
                         <button onClick={Dr.onTbd} style={st(Dr.tbdStyle)}>TBD</button>
                         <button onClick={Dr.onFcfs} style={st(Dr.fcfsStyle)}>First come</button>
+                      </div>
+                    </div>
+                    <div style={st("margin-top:13px;")}>
+                      <div style={st(V.labelStyle)}>Meals</div>
+                      <div style={st("display:flex;flex-direction:column;gap:8px;")}>
+                        <div style={st("display:flex;align-items:center;gap:8px;")}>
+                          <span style={st("flex:none;width:72px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#7f9498;")}>Breakfast</span>
+                          <input value={Dr.mealB} onChange={Dr.onMealB} placeholder="e.g. Bakery in town" style={st(V.inputStyle)} />
+                        </div>
+                        <div style={st("display:flex;align-items:center;gap:8px;")}>
+                          <span style={st("flex:none;width:72px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#7f9498;")}>Lunch</span>
+                          <input value={Dr.mealL} onChange={Dr.onMealL} placeholder="e.g. Packed for the trail" style={st(V.inputStyle)} />
+                        </div>
+                        <div style={st("display:flex;align-items:center;gap:8px;")}>
+                          <span style={st("flex:none;width:72px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#7f9498;")}>Dinner</span>
+                          <input value={Dr.mealD} onChange={Dr.onMealD} placeholder="e.g. Ægir Pub" style={st(V.inputStyle)} />
+                        </div>
                       </div>
                     </div>
                     <div style={st("margin-top:13px;")}>
