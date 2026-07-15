@@ -217,7 +217,7 @@ class NorwayApp extends React.Component {
     selectedIndex: 0,
     detailDay: null,
     sheetMode: (this.props && this.props.startExpanded) ? 'full' : 'peek',
-    mapStyle: (this.props && this.props.defaultMapStyle) || 'satellite',
+    mapStyle: (function(){ try { const s=localStorage.getItem('norway_map_style'); return (s==='satellite'||s==='terrain'||s==='street')?s:'street'; } catch(e){ return 'street'; } })(),
     overrides: (function(k){ try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch(e){ return {}; } })('norway_fjords_v1'),
     online: (typeof navigator !== 'undefined') ? navigator.onLine : true,
     editing: false, editIndex: null, editDraft: null,
@@ -474,6 +474,7 @@ class NorwayApp extends React.Component {
     if(!this.map || !this.tileLayers || !this.tileLayers[s]) return;
     Object.keys(this.tileLayers).forEach(k=>{ if(k!==s && this.map.hasLayer(this.tileLayers[k])) this.map.removeLayer(this.tileLayers[k]); });
     if(!this.map.hasLayer(this.tileLayers[s])) this.tileLayers[s].addTo(this.map);
+    try { localStorage.setItem('norway_map_style', s); } catch(_){}
     this.setState({mapStyle:s});
   }
   flyToDay(i){ if(!this.map) return; const d = this.DEFAULTS[i]; if(!d || d.onMap===false) return; const z = (i===12) ? 6.2 : 9.2; this.map.flyTo(d.coord, z, {duration:1.0}); }
