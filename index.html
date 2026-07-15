@@ -529,11 +529,40 @@ class NorwayApp extends React.Component {
   selectDay = (i)=>{ this.setState({selectedIndex:i}); };
   openDetail = (i)=>{ if(this.state.detailDay==null) this._detailFrom = this.state.sheetMode; this.setState({detailDay:i, selectedIndex:i, sheetMode:'full'}); };
   onBack = ()=>{ const back = this._detailFrom || 'peek'; this.setState({detailDay:null, sheetMode:back}); };
-  onDetailDown = (e)=>{ this._dStart = {x:e.clientX, y:e.clientY}; };
+  setDetailCard = (el)=>{ this.detailCardEl = el; };
+  onDetailDown = (e)=>{
+    this._dStart = {x:e.clientX, y:e.clientY};
+    this._swipeAxis = null;
+    if(this.detailCardEl) this.detailCardEl.style.transition = 'none';
+  };
+  onDetailMove = (e)=>{
+    if(!this._dStart) return;
+    const dx = e.clientX - this._dStart.x, dy = e.clientY - this._dStart.y;
+    if(this._swipeAxis === null){
+      if(Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) this._swipeAxis = 'x';
+      else if(Math.abs(dy) > 8) this._swipeAxis = 'y';   // vertical scroll — leave it alone
+    }
+    if(this._swipeAxis === 'x'){
+      if(e.cancelable) e.preventDefault();
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_){}
+      const i = this.state.detailDay;
+      const atEnd = (dx > 0 && i <= 0) || (dx < 0 && i >= this.DEFAULTS.length-1);
+      const eff = atEnd ? dx * 0.28 : dx;   // rubber-band at the first/last day
+      if(this.detailCardEl){
+        this.detailCardEl.style.transform = 'translateX(' + eff + 'px)';
+        this.detailCardEl.style.opacity = String(Math.max(0.5, 1 - Math.abs(eff)/460));
+      }
+    }
+  };
   onDetailUp = (e)=>{
     if(!this._dStart) return;
-    const dx = e.clientX - this._dStart.x, dy = e.clientY - this._dStart.y; this._dStart = null;
-    if(Math.abs(dx) > 64 && Math.abs(dx) > Math.abs(dy)*1.4){
+    const dx = e.clientX - this._dStart.x, axis = this._swipeAxis;
+    this._dStart = null; this._swipeAxis = null;
+    if(this.detailCardEl){
+      this.detailCardEl.style.transition = 'transform .26s ease, opacity .26s ease';
+      this.detailCardEl.style.transform = ''; this.detailCardEl.style.opacity = '';
+    }
+    if(axis === 'x' && Math.abs(dx) > 56){
       const i = this.state.detailDay; if(i==null) return;
       if(dx < 0 && i < this.DEFAULTS.length-1) this.openDetail(i+1);
       else if(dx > 0 && i > 0) this.openDetail(i-1);
@@ -748,7 +777,7 @@ class NorwayApp extends React.Component {
       setSheetRef:this.setSheetRef, setStripRef:this.setStripRef,
       onSheetDown:this.onSheetDown, onSheetMove:this.onSheetMove, onSheetUp:this.onSheetUp,
       toggleSheet:this.toggleSheet, stop:this.stop, onBack:this.onBack,
-      onDetailDown:this.onDetailDown, onDetailUp:this.onDetailUp, onStripWheel:this.onStripWheel,
+      onDetailDown:this.onDetailDown, onDetailMove:this.onDetailMove, onDetailUp:this.onDetailUp, setDetailCard:this.setDetailCard, onStripWheel:this.onStripWheel,
       onSat:()=>this.setStyle('satellite'), onTerr:()=>this.setStyle('terrain'), onStreet:()=>this.setStyle('street'),
       satBtnStyle: segStyle(this.state.mapStyle==='satellite'),
       terrBtnStyle: segStyle(this.state.mapStyle==='terrain'),
@@ -851,8 +880,8 @@ class NorwayApp extends React.Component {
 
                 {V.detailOpen && (
                   <div style={st("flex:1;display:flex;flex-direction:column;min-height:0;")}>
-                    <div className="np-scroll" style={st("flex:1;overflow-y:auto;padding:4px 14px 14px;")}>
-                      <div className="np-card-anim" onPointerDown={V.onDetailDown} onPointerUp={V.onDetailUp} style={st("border-radius:18px;border:1px solid rgba(78,205,196,.4);padding:16px;box-shadow:0 10px 26px -16px rgba(0,0,0,.8);background:linear-gradient(180deg,#1a2b33,#15242b);")}>
+                    <div className="np-scroll" onPointerDown={V.onDetailDown} onPointerMove={V.onDetailMove} onPointerUp={V.onDetailUp} onPointerCancel={V.onDetailUp} style={st("flex:1;overflow-y:auto;padding:4px 14px 14px;touch-action:pan-y;")}>
+                      <div key={D.idx} ref={V.setDetailCard} className="np-card-anim" style={st("border-radius:18px;border:1px solid rgba(78,205,196,.4);padding:16px;box-shadow:0 10px 26px -16px rgba(0,0,0,.8);background:linear-gradient(180deg,#1a2b33,#15242b);will-change:transform;")}>
                         <div style={st("display:flex;align-items:center;gap:8px;flex-wrap:wrap;")}>
                           <span style={st("font-size:11px;font-weight:600;color:#9fb4b6;letter-spacing:.3px;")}>{D.weekday} · {D.dateStr}</span>
                           <div style={st("display:flex;align-items:center;gap:5px;color:#9fd2ed;font-size:11px;font-weight:600;")}>{D.skyIcon}{D.hi}° / {D.lo}° · {D.skyLabel}</div>
