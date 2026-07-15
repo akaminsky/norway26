@@ -274,7 +274,7 @@ class NorwayApp extends React.Component {
     const aUrls = YEARS.map(yr=>'https://archive-api.open-meteo.com/v1/archive?latitude='+lats+'&longitude='+lons+'&daily='+daily+'&timezone='+tz+'&start_date='+yr+'-07-15&end_date='+yr+'-07-28');
     const grab = (url)=>fetch(url).then(r=>r.json()).then(j=>Array.isArray(j)?j:[j]).catch(()=>null);
     Promise.all([grab(fUrl)].concat(aUrls.map(grab))).then(res=>{
-      this._wxBusy = false;
+      this._wxBusy = false; this._wxLast = Date.now();
       const f = res[0], archives = res.slice(1);
       const out = {};
       // 1) Forecast wins where available.
@@ -388,6 +388,10 @@ class NorwayApp extends React.Component {
     this._onDown = ()=>this.setState({online:false});
     window.addEventListener('online', this._onUp);
     window.addEventListener('offline', this._onDown);
+    // Refresh the forecast when the app is refocused (e.g. reopened from the
+    // home screen) if it's been a few minutes, so weather stays current.
+    this._onVis = ()=>{ if(document.visibilityState==='visible' && navigator.onLine && (!this._wxLast || Date.now()-this._wxLast > 6e5)) this.fetchWeather(); };
+    document.addEventListener('visibilitychange', this._onVis);
     if(this.state.online) this.fetchWeather();
     this._onKey = (e)=>{
       if(this.state.detailDay==null || this.state.editing) return;
@@ -404,6 +408,7 @@ class NorwayApp extends React.Component {
   componentWillUnmount(){
     window.removeEventListener('online', this._onUp);
     window.removeEventListener('offline', this._onDown);
+    if(this._onVis) document.removeEventListener('visibilitychange', this._onVis);
     if(this._onKey) window.removeEventListener('keydown', this._onKey);
   }
   componentDidUpdate(){

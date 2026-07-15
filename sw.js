@@ -5,7 +5,7 @@
    so they're never served stale.
 
    Bump BUILD on each deploy to force already-installed clients to update. */
-const BUILD = '2026-07-15a';
+const BUILD = '2026-07-15b';
 const CACHE = 'norway-shell-' + BUILD;
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
