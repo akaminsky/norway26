@@ -420,8 +420,6 @@ class NorwayApp extends React.Component {
     window.addEventListener('keydown', this._onKey);
     this.waitForL(()=>this.initMap());
     requestAnimationFrame(()=>this.applySheet(this.state.sheetMode, false));
-    // Jump the day strip to today's card on load (no smooth scroll).
-    requestAnimationFrame(()=>{ if(this.stripEl && this.state.sheetMode!=='full') this.stripEl.scrollLeft = Math.max(0, this.state.selectedIndex*258 - 70); });
   }
   componentWillUnmount(){
     window.removeEventListener('online', this._onUp);
@@ -553,14 +551,14 @@ class NorwayApp extends React.Component {
     if(!this.dragging) return;
     this.dragging = false;
     const t = this.snapTargets(); if(!t) return;
-    const opts = [['full',t.full],['peek',t.peek],['tab',t.tab]];
+    const opts = [['full',t.full],['tab',t.tab]];
     let best = opts[0], bd = 1e9;
     opts.forEach(o=>{ const dd=Math.abs(o[1]-this.curTy); if(dd<bd){ bd=dd; best=o; } });
     this.applySheet(best[0], true);
     this.setState({sheetMode:best[0]});
   };
   stop = (e)=>{ e.stopPropagation(); };
-  toggleSheet = ()=>{ const order=['tab','peek','full']; let i=order.indexOf(this.state.sheetMode); if(i<0) i=0; const next=order[(i+1)%order.length]; this.applySheet(next, true); this.setState({sheetMode:next}); };
+  toggleSheet = ()=>{ const next = this.state.sheetMode==='full' ? 'tab' : 'full'; this.applySheet(next, true); this.setState({sheetMode:next}); };
   centerStrip(){ if(!this.stripEl || this.state.sheetMode==='full') return; const cw=258; this.stripEl.scrollTo({left:Math.max(0, this.state.selectedIndex*cw - 70), behavior:'smooth'}); }
 
   selectDay = (i)=>{ this.setState({selectedIndex:i}); };
@@ -797,14 +795,13 @@ class NorwayApp extends React.Component {
 
     return {
       days, today, detail, detailOpen, notDetail:!detailOpen,
-      listOpen: this.state.sheetMode==='full' && !detailOpen,
-      stripOpen: this.state.sheetMode!=='full' && !detailOpen,
+      listOpen: !detailOpen,
       online:this.state.online, offline:!this.state.online,
       wifiOffIcon:this.iconEl('wifiOff',10),
       arrowIcon:this.iconEl('arrowRight',15), arrowIconSm:this.iconEl('arrowRight',13),
       chevronIcon:this.iconEl('chevronUp',18), chevronLeftIcon:this.iconEl('chevronLeft',18), chevronRightIcon:this.iconEl('chevronRight',14),
       chevronRot: this.state.sheetMode==='full' ? 'rotate(180deg)' : 'rotate(0deg)',
-      sheetHint: this.state.sheetMode==='full' ? '14 days · tap a day to open it' : (this.state.sheetMode==='tab' ? '14 days · tap to browse' : '14 days · tap a day, or expand'),
+      sheetHint: this.state.sheetMode==='full' ? '14 days · tap a day to open it' : '14 days · tap to open',
       clockIconSm:this.iconEl('clock',13), ferryIconSm:this.iconEl('ship',13),
       scheduleIcon:this.iconEl('clock',14), utensilsIcon:this.iconEl('utensils',14),
       bedIcon:this.iconEl('bed',16), shirtIcon:this.iconEl('shirt',15),
@@ -1082,38 +1079,6 @@ class NorwayApp extends React.Component {
                   </div>
                 )}
 
-                {V.stripOpen && (
-                  <div className="np-scroll" ref={V.setStripRef} onWheel={V.onStripWheel} style={st("flex:none;display:flex;gap:12px;overflow-x:auto;padding:4px 16px calc(18px + env(safe-area-inset-bottom, 0px));scroll-snap-type:x mandatory;")}>
-                    {V.days.map((day) => (
-                      <div key={day.day} onClick={day.onOpen} style={st("scroll-snap-align:center;flex:none;width:246px;background:linear-gradient(180deg,#1a2b33,#15242b);border-radius:18px;border:1px solid "+day.cardBorder+";padding:14px;cursor:pointer;box-shadow:0 12px 26px -16px rgba(0,0,0,.8);")}>
-                        <div style={st("display:flex;align-items:center;justify-content:space-between;")}>
-                          <div style={st("display:flex;align-items:center;gap:9px;")}>
-                            <div style={st("flex:none;width:40px;height:40px;border-radius:11px;background:"+day.badgeBg+";border:1px solid "+day.badgeBorder+";display:flex;flex-direction:column;align-items:center;justify-content:center;")}>
-                              <div style={st("font-size:7px;font-weight:600;letter-spacing:.4px;color:"+day.badgeMeta+";text-transform:uppercase;")}>Day</div>
-                              <div style={st("font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;color:"+day.badgeNum+";line-height:1;")}>{day.day}</div>
-                            </div>
-                            <div>
-                              <div style={st("font-size:10.5px;font-weight:600;color:#9fb4b6;letter-spacing:.2px;")}>{day.weekday} · {day.dateStr}</div>
-                              <div style={st("display:flex;align-items:center;gap:4px;margin-top:3px;font-size:10px;color:#85a7bd;font-weight:600;")}>{day.skyIcon}{day.hi}° / {day.lo}°</div>
-                            </div>
-                          </div>
-                          {day.modified && (<span style={st("width:8px;height:8px;border-radius:50%;background:#e09a5a;flex:none;box-shadow:0 0 7px rgba(224,154,90,.7);")}></span>)}
-                        </div>
-                        <div style={st("display:flex;align-items:center;gap:5px;margin-top:11px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13.5px;color:#f0f7f6;line-height:1.2;")}>
-                          <span style={st("white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:88px;")}>{day.from}</span><span style={st("color:#4ECDC4;flex:none;display:inline-flex;")}>{V.arrowIconSm}</span><span style={st("white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:96px;")}>{day.to}</span>
-                        </div>
-                        <div style={st("display:flex;align-items:center;gap:8px;margin-top:11px;")}>
-                          <span style={st("flex:none;width:26px;height:26px;border-radius:7px;background:rgba(78,205,196,.1);border:1px solid rgba(78,205,196,.18);display:flex;align-items:center;justify-content:center;color:#4ECDC4;")}>{day.topIcon}</span>
-                          <div style={st("flex:1;min-width:0;font-size:11.5px;color:#c3d4d3;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;")}>{day.topActivity}</div>
-                        </div>
-                        <div style={st("display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.06);")}>
-                          <span style={st("display:flex;align-items:center;gap:5px;background:"+day.statusBg+";border:1px solid "+day.statusBorder+";color:"+day.statusColor+";border-radius:7px;padding:3px 7px;font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;")}><span style={st("width:5px;height:5px;border-radius:50%;background:"+day.statusColor+";")}></span>{day.statusLabel}</span>
-                          <span style={st("flex:none;display:flex;align-items:center;gap:4px;color:#7fe0d8;font-size:11px;font-weight:600;")}>Open {V.chevronRightIcon}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
 
