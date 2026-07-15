@@ -232,6 +232,9 @@ class NorwayApp extends React.Component {
   };
 
   accent(){ return '#4ECDC4'; }
+  // Index of today's day within the trip (Jul 15–28, 2026), clamped; isToday is
+  // false before/after the trip.
+  computeToday(){ try { const start=new Date(2026,6,15); const now=new Date(); const t=new Date(now.getFullYear(),now.getMonth(),now.getDate()); const diff=Math.round((t-start)/864e5); const last=(this.DEFAULTS?this.DEFAULTS.length:14)-1; return {idx:Math.max(0,Math.min(last,diff)), isToday:(diff>=0&&diff<=last)}; } catch(e){ return {idx:0, isToday:false}; } }
   units(){ return (this.props && this.props.units) || 'km'; }
 
   typeKeyMap(){ if(!this._tm){ this._tm = {}; this.TYPES.forEach(t=>{ this._tm[t.key]=t; }); } return this._tm; }
@@ -367,7 +370,7 @@ class NorwayApp extends React.Component {
           const icon = L.divIcon({html, className:'', iconSize:[28,28], iconAnchor:[14,14], tooltipAnchor:[0,-13]});
           const m = L.marker(a.coord, {icon}).addTo(this.actLayer);
           m.bindTooltip((a.text||'Activity')+' · Day '+d.day, {className:'np-tip', direction:'top', offset:[0,-2]});
-          m.on('click', ()=>this.selectDay(d.day-1));
+          m.on('click', ()=>this.openDetail(d.day-1));
         }
       });
     });
@@ -479,7 +482,7 @@ class NorwayApp extends React.Component {
       const range = p.days.length>1 ? (p.days[0]+'–'+p.days[p.days.length-1]) : String(p.days[0]);
       const lbl = isStay ? ('Night '+range) : ('Day '+range);
       m.bindTooltip(p.n+' · '+lbl, {className:'np-tip', direction:'top', offset:[0,-2]});
-      m.on('click', ()=>{ this.selectDay(p.days[0]-1); m.openTooltip(); });
+      m.on('click', ()=>this.openDetail(p.days[0]-1));
       this.markers.push({m, days:p.days});
     });
   }
@@ -684,16 +687,18 @@ class NorwayApp extends React.Component {
     const merged = this.mergedDays();
     const days = merged.map((d, i)=>this.decorateDay(d, i));
 
-    const selIdx = this.state.selectedIndex;
-    const t = merged[selIdx] || merged[0];
+    // The top card always tracks TODAY, independent of which day/pin is selected.
+    const td = this.computeToday();
+    const todayIdx = td.idx;
+    const t = merged[todayIdx] || merged[0];
     const tWf = this.weatherFor(t);
     const tSky = this.SKY[tWf.sky] || this.SKY.cloudsun;
     const today = {
       dayNum:t.day, weekday:t.weekday, dateStr:t.date, from:t.from, to:t.to,
       hi:tWf.hi, lo:tWf.lo, skyIcon:this.iconEl(tSky.icon, 14), skyIconBig:this.iconEl(tSky.icon, 19), skyLabel:tWf.label,
       wxSource:(tWf.source==='forecast'?'Live forecast':'Typical July average'),
-      wear:t.wear, wearIcon:this.iconEl('shirt', 14),
-      onOpen: ()=>this.openDetail(selIdx)
+      wear:t.wear, wearIcon:this.iconEl('shirt', 14), isToday:td.isToday,
+      onOpen: ()=>this.openDetail(todayIdx)
     };
 
     const detailIdx = this.state.detailDay;
@@ -827,6 +832,7 @@ class NorwayApp extends React.Component {
                   <div style={st("min-width:0;")}>
                     <div style={st("display:flex;align-items:center;gap:7px;flex-wrap:wrap;")}>
                       <span style={st("font-size:9.5px;font-weight:700;letter-spacing:.8px;color:#4ECDC4;text-transform:uppercase;")}>Day {T.dayNum} / 14</span>
+                      {T.isToday && (<span style={st("font-size:8.5px;font-weight:800;letter-spacing:.6px;color:#06181a;background:#4ECDC4;border-radius:5px;padding:1px 5px;text-transform:uppercase;")}>Today</span>)}
                       <span style={st("font-size:10px;color:#7f9498;font-weight:600;letter-spacing:.2px;")}>{T.weekday} · {T.dateStr}</span>
                     </div>
                     <div style={st("margin-top:7px;display:flex;align-items:center;gap:7px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:18.5px;color:#f2f8f7;line-height:1.05;flex-wrap:wrap;")}>
