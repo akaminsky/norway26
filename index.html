@@ -824,7 +824,6 @@ class NorwayApp extends React.Component {
                     </div>
                   </div>
                   <div style={st("display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex:none;")}>
-                    {V.online && (<div style={st("display:flex;align-items:center;gap:4px;background:rgba(78,205,196,.14);border:1px solid rgba(78,205,196,.3);color:#7fe0d8;border-radius:999px;padding:3px 8px;font-size:9px;font-weight:700;letter-spacing:.4px;")}><span style={st("width:5px;height:5px;border-radius:50%;background:#4ECDC4;box-shadow:0 0 8px #4ECDC4;")}></span>LIVE</div>)}
                     {V.offline && (<div style={st("display:flex;align-items:center;gap:4px;background:rgba(230,193,90,.16);border:1px solid rgba(230,193,90,.4);color:#f0d089;border-radius:999px;padding:3px 8px;font-size:9px;font-weight:700;letter-spacing:.4px;")}>{V.wifiOffIcon}OFFLINE</div>)}
                     <div style={st("display:flex;align-items:center;gap:6px;color:#9fd2ed;")}>
                       {T.skyIconBig}
@@ -836,11 +835,6 @@ class NorwayApp extends React.Component {
                 <div style={st("display:flex;align-items:center;gap:7px;margin-top:12px;")}>
                   <div style={st("flex:none;display:flex;align-items:center;gap:5px;background:rgba(143,208,240,.1);border:1px solid rgba(143,208,240,.22);border-radius:8px;padding:5px 9px;font-size:11px;color:#a8d3ec;font-weight:600;")}>{T.skyIcon}{T.skyLabel}</div>
                   <div style={st("flex:1;min-width:0;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:5px 9px;font-size:11px;color:#cdd9d8;font-weight:500;")}><span style={st("flex:none;color:#9fb4b6;display:inline-flex;")}>{T.wearIcon}</span><span style={st("overflow:hidden;text-overflow:ellipsis;white-space:nowrap;")}>{T.wear}</span></div>
-                </div>
-
-                <div style={st("display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.07);")}>
-                  <span style={st("font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#6f8488;")}>{T.wxSource}</span>
-                  <span style={st("display:flex;align-items:center;gap:4px;color:#7fe0d8;font-size:11.5px;font-weight:600;")}>View full day {V.chevronRightIcon}</span>
                 </div>
               </div>
 
