@@ -377,7 +377,7 @@ class NorwayApp extends React.Component {
           const html = '<div class="np-pin"><div class="np-pin-dot" style="width:26px;height:26px;background:'+this.ACT_COLOR+';color:#08141a;">'+this.iconSvg(this.iconForAct(a),13)+'</div></div>';
           const icon = L.divIcon({html, className:'', iconSize:[28,28], iconAnchor:[14,14], tooltipAnchor:[0,-13]});
           const m = L.marker(a.coord, {icon}).addTo(this.actLayer);
-          m.bindPopup(this.activityCard(a.text||'Activity', d.day), {className:'np-pop', closeButton:false, offset:[0,-2], autoPanPaddingTopLeft:[18,180], autoPanPaddingBottomRight:[18,110]});
+          m.bindPopup(this.pinCard(a.text||'Activity', [d.day], 'activity'), {className:'np-pop', closeButton:false, offset:[0,-2], autoPanPaddingTopLeft:[18,180], autoPanPaddingBottomRight:[18,110]});
         }
       });
     });
@@ -486,27 +486,28 @@ class NorwayApp extends React.Component {
       const html = '<div class="np-pin"><div class="np-pin-dot" style="width:'+size+'px;height:'+size+'px;background:'+color+';font-family:\'Space Grotesk\',sans-serif;font-weight:700;font-size:'+fs+'px;color:#08141a;">'+label+'</div></div>';
       const icon = L.divIcon({html, className:'', iconSize:[size,size], iconAnchor:[size/2,size/2], tooltipAnchor:[0,-(size/2+1)], popupAnchor:[0,-(size/2)]});
       const m = L.marker(p.c, {icon}).addTo(map);
-      const day = p.days[0];
-      if(isStay){
-        // Overnight base → open the full day directly.
-        const range = p.days.length>1 ? (p.days[0]+'–'+p.days[p.days.length-1]) : String(day);
-        m.bindTooltip(p.n+' · Night '+range, {className:'np-tip', direction:'top', offset:[0,-2]});
-        m.on('click', ()=>this.openDetail(day-1));
-      } else {
-        // Activity → peek card next to the pin; tap it to open the day.
-        m.bindPopup(this.activityCard(p.n, day), {className:'np-pop', closeButton:false, offset:[0,-2], autoPanPaddingTopLeft:[18,180], autoPanPaddingBottomRight:[18,110]});
-      }
+      // Every pin → a peek card next to it; tap the card to open the full day.
+      m.bindPopup(this.pinCard(p.n, p.days, p.kind), {className:'np-pop', closeButton:false, offset:[0,-2], autoPanPaddingTopLeft:[18,180], autoPanPaddingBottomRight:[18,110]});
       this.markers.push({m, days:p.days});
     });
   }
-  activityCard(name, day){
-    const dd = this.DEFAULTS[day-1];
+  pinCard(name, days, kind){
+    const first = this.DEFAULTS[days[0]-1], last = this.DEFAULTS[days[days.length-1]-1];
+    let label;
+    if(kind==='stay'){
+      const dr = days.length>1 ? ((first?first.date:'') + '–' + (last?last.date.split(' ').pop():'')) : (first?first.date:'');
+      label = (days.length>1 ? ('Nights '+days[0]+'–'+days[days.length-1]) : ('Night '+days[0])) + (dr?(' · '+dr):'');
+    } else {
+      label = 'Day ' + days[0] + (first?(' · '+first.date):'');
+    }
     const el = document.createElement('div');
     el.className = 'np-actcard';
     el.innerHTML = '<div class="np-actcard-day"></div><div class="np-actcard-title"></div><div class="np-actcard-cta">See the full day →</div>';
-    el.querySelector('.np-actcard-day').textContent = 'Day ' + day + (dd ? ' · ' + dd.date : '');
+    const dayEl = el.querySelector('.np-actcard-day');
+    dayEl.textContent = label;
+    dayEl.style.color = kind==='stay' ? '#7fe0d8' : '#F2A54E';
     el.querySelector('.np-actcard-title').textContent = name;
-    el.addEventListener('click', ()=>{ if(this.map) this.map.closePopup(); this.openDetail(day-1); });
+    el.addEventListener('click', ()=>{ if(this.map) this.map.closePopup(); this.openDetail(days[0]-1); });
     return el;
   }
   setStyle(s){
