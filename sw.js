@@ -11,7 +11,7 @@
      back to the last forecast it saved in local storage).
 
    Bump BUILD on each deploy to force already-installed clients to update. */
-const BUILD = '2026-07-15i';
+const BUILD = '2026-07-15j';
 const CACHE = 'norway-shell-' + BUILD;   // app shell + libraries + fonts
 const TILES = 'norway-tiles-v1';         // map tiles (kept across deploys)
 const TILE_CAP = 700;                    // ~ up to a few hundred MB worst case; trims oldest
