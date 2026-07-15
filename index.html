@@ -436,9 +436,10 @@ class NorwayApp extends React.Component {
       this.centerStrip();
     }
     if(this._prevSheet !== this.state.sheetMode){
+      const wasNotFull = this._prevSheet !== 'full';
       this._prevSheet = this.state.sheetMode;
       this.applySheet(this.state.sheetMode, true);
-      if(this.state.sheetMode !== 'full') this.centerStrip();
+      if(this.state.sheetMode==='full' && wasNotFull) requestAnimationFrame(()=>this.scrollListToToday());
       setTimeout(()=>{ if(this.map) this.map.invalidateSize(); }, 460);
     }
     if(this._ovRef !== this.state.overrides){
@@ -524,6 +525,13 @@ class NorwayApp extends React.Component {
 
   setSheetRef = (el)=>{ this.sheetEl = el; if(el) requestAnimationFrame(()=>{ if(this.curTy==null) this.applySheet(this.state.sheetMode, false); }); };
   setStripRef = (el)=>{ this.stripEl = el; };
+  setListRef = (el)=>{ this.listEl = el; };
+  scrollListToToday(){
+    if(!this.listEl) return;
+    const tdy = this.computeToday();
+    const card = this.listEl.querySelector('[data-day="'+(tdy.idx+1)+'"]');
+    if(card) this.listEl.scrollTop = Math.max(0, card.offsetTop - 8);
+  }
   snapTargets(){ const el=this.sheetEl; if(!el) return null; const H=el.parentNode.clientHeight; return {full:Math.round(H*0.06), mid:Math.round(H*0.46), peek:H-188, tab:H-70, H}; }
   applySheet(mode, animate){
     const t = this.snapTargets(); if(!t) return;
@@ -668,8 +676,9 @@ class NorwayApp extends React.Component {
     const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(placeQ + ' Norway');
     const mealsList = d.meals ? [['Breakfast',d.meals.b],['Lunch',d.meals.l],['Dinner',d.meals.d]].filter(m=>m[1]).map(m=>({label:m[0], text:m[1], need:/^\s*need/i.test(m[1])})) : [];
     const timeline = d.timeline || [];
+    const tdy = this.computeToday();
     return Object.assign({}, d, {
-      idx:i, selected, weekday:d.weekday, dateStr:d.date,
+      idx:i, selected, weekday:d.weekday, dateStr:d.date, isToday:(i===tdy.idx && tdy.isToday),
       timeline, hasTimeline:timeline.length>0, meals:mealsList, hasMeals:mealsList.length>0,
       hi:wf.hi, lo:wf.lo, skyIcon:this.iconEl(sky.icon, 13), skyLabel:wf.label, wxSource:(wf.source==='forecast'?'Live forecast':'Typical July'), wear:d.wear,
       detailTitle:'Day '+d.day+' · '+d.date, routeLabel:d.from+' → '+d.to,
@@ -811,7 +820,7 @@ class NorwayApp extends React.Component {
       cameraIcon:this.iconEl('camera',14), resetIcon:this.iconEl('rotate',13), logIcon:this.iconEl('notebook',13),
       plusIcon:this.iconEl('plus',16), plusIconSm:this.iconEl('plus',13), xIcon:this.iconEl('x',16), xIconSm:this.iconEl('x',12),
       trashIconSm:this.iconEl('trash',13),
-      setSheetRef:this.setSheetRef, setStripRef:this.setStripRef,
+      setSheetRef:this.setSheetRef, setStripRef:this.setStripRef, setListRef:this.setListRef,
       onSheetDown:this.onSheetDown, onSheetMove:this.onSheetMove, onSheetUp:this.onSheetUp,
       toggleSheet:this.toggleSheet, stop:this.stop, onBack:this.onBack,
       onDetailDown:this.onDetailDown, onDetailMove:this.onDetailMove, onDetailUp:this.onDetailUp, setDetailCard:this.setDetailCard, onStripWheel:this.onStripWheel,
@@ -1043,9 +1052,9 @@ class NorwayApp extends React.Component {
                 )}
 
                 {V.listOpen && (
-                  <div className="np-scroll" style={st("flex:1;overflow-y:auto;padding:4px 14px calc(30px + env(safe-area-inset-bottom, 0px));")}>
+                  <div className="np-scroll" ref={V.setListRef} style={st("flex:1;overflow-y:auto;padding:4px 14px calc(30px + env(safe-area-inset-bottom, 0px));")}>
                     {V.days.map((day) => (
-                      <div key={day.day} onClick={day.onOpen} style={st("border-radius:16px;border:1px solid "+day.cardBorder+";padding:13px;margin-bottom:11px;cursor:pointer;background:linear-gradient(180deg,#1a2b33,#15242b);box-shadow:0 8px 22px -16px rgba(0,0,0,.8);")}>
+                      <div key={day.day} data-day={day.day} onClick={day.onOpen} style={st("border-radius:16px;border:1px solid "+day.cardBorder+";padding:13px;margin-bottom:11px;cursor:pointer;background:linear-gradient(180deg,#1a2b33,#15242b);box-shadow:0 8px 22px -16px rgba(0,0,0,.8);")}>
                         <div style={st("display:flex;align-items:center;gap:11px;")}>
                           <div style={st("flex:none;width:42px;height:42px;border-radius:12px;background:"+day.badgeBg+";border:1px solid "+day.badgeBorder+";display:flex;flex-direction:column;align-items:center;justify-content:center;")}>
                             <div style={st("font-size:7px;font-weight:600;letter-spacing:.4px;color:"+day.badgeMeta+";text-transform:uppercase;")}>Day</div>
@@ -1054,7 +1063,8 @@ class NorwayApp extends React.Component {
                           <div style={st("flex:1;min-width:0;")}>
                             <div style={st("display:flex;align-items:center;gap:6px;")}>
                               <span style={st("font-size:10.5px;font-weight:600;color:#9fb4b6;letter-spacing:.2px;")}>{day.weekday} · {day.dateStr}</span>
-                              <span style={st("display:flex;align-items:center;gap:3px;color:#85a7bd;font-size:10px;font-weight:600;")}>{day.skyIcon}{day.hi}°</span>
+                              <span style={st("display:flex;align-items:center;gap:3px;color:#85a7bd;font-size:10px;font-weight:600;")}>{day.skyIcon}{day.hi}° / {day.lo}°</span>
+                              {day.isToday && (<span style={st("font-size:8px;font-weight:800;letter-spacing:.5px;color:#06181a;background:#4ECDC4;border-radius:4px;padding:1px 5px;text-transform:uppercase;")}>Today</span>)}
                               {day.modified && (<span style={st("width:7px;height:7px;border-radius:50%;background:#e09a5a;box-shadow:0 0 7px rgba(224,154,90,.7);")}></span>)}
                             </div>
                             <div style={st("display:flex;align-items:center;gap:5px;margin-top:4px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14.5px;color:#f0f7f6;line-height:1.15;")}>
