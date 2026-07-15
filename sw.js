@@ -11,7 +11,7 @@
      back to the last forecast it saved in local storage).
 
    Bump BUILD on each deploy to force already-installed clients to update. */
-const BUILD = '2026-07-15c';
+const BUILD = '2026-07-15d';
 const CACHE = 'norway-shell-' + BUILD;   // app shell + libraries + fonts
 const TILES = 'norway-tiles-v1';         // map tiles (kept across deploys)
 const TILE_CAP = 700;                    // ~ up to a few hundred MB worst case; trims oldest
@@ -26,7 +26,7 @@ const LIBS = [
 ];
 
 function isTile(url) {
-  return url.hostname.indexOf('arcgisonline.com') !== -1 || url.hostname.indexOf('opentopomap.org') !== -1;
+  return url.hostname.indexOf('arcgisonline.com') !== -1 || url.hostname.indexOf('opentopomap.org') !== -1 || url.hostname.indexOf('cartocdn.com') !== -1;
 }
 function isLibOrFont(url) {
   return url.hostname === 'unpkg.com' || url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';

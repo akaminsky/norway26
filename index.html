@@ -440,7 +440,9 @@ class NorwayApp extends React.Component {
     this.map = map;
     this.tileSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:17, attribution:'Esri, Maxar'});
     this.tileTerr = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {maxZoom:16, subdomains:'abc', attribution:'© OpenTopoMap (CC-BY-SA)'});
-    ((this.state.mapStyle==='satellite') ? this.tileSat : this.tileTerr).addTo(map);
+    this.tileStreet = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {maxZoom:19, subdomains:'abcd', attribution:'© OpenStreetMap © CARTO'});
+    this.tileLayers = {satellite:this.tileSat, terrain:this.tileTerr, street:this.tileStreet};
+    (this.tileLayers[this.state.mapStyle] || this.tileSat).addTo(map);
     this.buildRoute(L, map);
     this.buildMarkers(L, map);
     this.refreshActivityMarkers();
@@ -469,10 +471,9 @@ class NorwayApp extends React.Component {
     });
   }
   setStyle(s){
-    if(!this.map) return;
-    const sat = s==='satellite';
-    this.map.removeLayer(sat ? this.tileTerr : this.tileSat);
-    (sat ? this.tileSat : this.tileTerr).addTo(this.map);
+    if(!this.map || !this.tileLayers || !this.tileLayers[s]) return;
+    Object.keys(this.tileLayers).forEach(k=>{ if(k!==s && this.map.hasLayer(this.tileLayers[k])) this.map.removeLayer(this.tileLayers[k]); });
+    if(!this.map.hasLayer(this.tileLayers[s])) this.tileLayers[s].addTo(this.map);
     this.setState({mapStyle:s});
   }
   flyToDay(i){ if(!this.map) return; const d = this.DEFAULTS[i]; if(!d || d.onMap===false) return; const z = (i===12) ? 6.2 : 9.2; this.map.flyTo(d.coord, z, {duration:1.0}); }
@@ -656,8 +657,8 @@ class NorwayApp extends React.Component {
     const detailOpen = detailIdx!=null;
     const detail = detailOpen ? days[detailIdx] : null;
 
-    const segBase = 'border:none;border-radius:8px;padding:6px 13px;font-size:11.5px;font-weight:600;cursor:pointer;letter-spacing:.2px;transition:all .2s;';
-    const satOn = this.state.mapStyle==='satellite';
+    const segBase = 'border:none;border-radius:8px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer;letter-spacing:.2px;transition:all .2s;';
+    const segStyle = (on)=> segBase + (on ? 'background:'+ac+';color:#06181a;' : 'background:transparent;color:#9fb4b6;');
     const labelStyle = 'font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:#7f9498;margin-bottom:6px;';
     const inputStyle = 'width:100%;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:11px 12px;outline:none;color:#eaf2f1;font-size:13.5px;font-weight:500;';
     const areaStyle = 'width:100%;min-height:58px;resize:vertical;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:11px 12px;outline:none;color:#eaf2f1;font-size:13px;line-height:1.45;font-family:Inter,sans-serif;';
@@ -744,9 +745,10 @@ class NorwayApp extends React.Component {
       onSheetDown:this.onSheetDown, onSheetMove:this.onSheetMove, onSheetUp:this.onSheetUp,
       toggleSheet:this.toggleSheet, stop:this.stop, onBack:this.onBack,
       onDetailDown:this.onDetailDown, onDetailUp:this.onDetailUp, onStripWheel:this.onStripWheel,
-      onSat:()=>this.setStyle('satellite'), onTerr:()=>this.setStyle('terrain'),
-      satBtnStyle: segBase + (satOn ? 'background:'+ac+';color:#06181a;' : 'background:transparent;color:#9fb4b6;'),
-      terrBtnStyle: segBase + (!satOn ? 'background:'+ac+';color:#06181a;' : 'background:transparent;color:#9fb4b6;'),
+      onSat:()=>this.setStyle('satellite'), onTerr:()=>this.setStyle('terrain'), onStreet:()=>this.setStyle('street'),
+      satBtnStyle: segStyle(this.state.mapStyle==='satellite'),
+      terrBtnStyle: segStyle(this.state.mapStyle==='terrain'),
+      streetBtnStyle: segStyle(this.state.mapStyle==='street'),
       editing:this.state.editing, draft, labelStyle, inputStyle, areaStyle,
       closeEdit:this.closeEdit, saveEdit:this.saveEdit
     };
@@ -810,6 +812,7 @@ class NorwayApp extends React.Component {
 
               <div style={st("display:flex;justify-content:flex-end;margin-top:10px;")}>
                 <div style={st("pointer-events:auto;display:flex;background:rgba(14,26,32,.9);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1);border-radius:11px;padding:3px;box-shadow:0 8px 20px -8px rgba(0,0,0,.6);")}>
+                  <button onClick={V.onStreet} style={st(V.streetBtnStyle)}>Map</button>
                   <button onClick={V.onSat} style={st(V.satBtnStyle)}>Satellite</button>
                   <button onClick={V.onTerr} style={st(V.terrBtnStyle)}>Terrain</button>
                 </div>
