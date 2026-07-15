@@ -217,7 +217,7 @@ class NorwayApp extends React.Component {
     // Open on today's day if the trip is underway (Jul 15–28, 2026); otherwise Day 1.
     selectedIndex: (()=>{ try { const start=new Date(2026,6,15); const now=new Date(); const t=new Date(now.getFullYear(),now.getMonth(),now.getDate()); const diff=Math.round((t-start)/864e5); const last=(this.DEFAULTS?this.DEFAULTS.length:14)-1; return Math.max(0, Math.min(last, diff)); } catch(e){ return 0; } })(),
     detailDay: null,
-    sheetMode: (this.props && this.props.startExpanded) ? 'full' : 'peek',
+    sheetMode: (this.props && this.props.startExpanded) ? 'full' : 'tab',
     mapStyle: (function(){ try { const s=localStorage.getItem('norway_map_style'); return (s==='satellite'||s==='terrain'||s==='street')?s:'street'; } catch(e){ return 'street'; } })(),
     overrides: (function(k){ try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch(e){ return {}; } })('norway_fjords_v1'),
     online: (typeof navigator !== 'undefined') ? navigator.onLine : true,
@@ -451,7 +451,7 @@ class NorwayApp extends React.Component {
     this.refreshActivityMarkers();
     this._ovRef = this.state.overrides;
     const b = L.latLngBounds(this.ROUTE);
-    map.fitBounds(b, {paddingTopLeft:[26,170], paddingBottomRight:[26,220]});
+    map.fitBounds(b, {paddingTopLeft:[26,170], paddingBottomRight:[26,96]});
     setTimeout(()=>map.invalidateSize(), 280);
     setTimeout(()=>{ this.updateActive(); }, 350);
   }
@@ -489,7 +489,7 @@ class NorwayApp extends React.Component {
 
   setSheetRef = (el)=>{ this.sheetEl = el; if(el) requestAnimationFrame(()=>{ if(this.curTy==null) this.applySheet(this.state.sheetMode, false); }); };
   setStripRef = (el)=>{ this.stripEl = el; };
-  snapTargets(){ const el=this.sheetEl; if(!el) return null; const H=el.parentNode.clientHeight; return {full:Math.round(H*0.06), mid:Math.round(H*0.46), peek:H-188, H}; }
+  snapTargets(){ const el=this.sheetEl; if(!el) return null; const H=el.parentNode.clientHeight; return {full:Math.round(H*0.06), mid:Math.round(H*0.46), peek:H-188, tab:H-70, H}; }
   applySheet(mode, animate){
     const t = this.snapTargets(); if(!t) return;
     const ty = t[mode];
@@ -516,14 +516,14 @@ class NorwayApp extends React.Component {
     if(!this.dragging) return;
     this.dragging = false;
     const t = this.snapTargets(); if(!t) return;
-    const opts = [['full',t.full],['mid',t.mid],['peek',t.peek]];
+    const opts = [['full',t.full],['peek',t.peek],['tab',t.tab]];
     let best = opts[0], bd = 1e9;
     opts.forEach(o=>{ const dd=Math.abs(o[1]-this.curTy); if(dd<bd){ bd=dd; best=o; } });
     this.applySheet(best[0], true);
     this.setState({sheetMode:best[0]});
   };
   stop = (e)=>{ e.stopPropagation(); };
-  toggleSheet = ()=>{ const next = this.state.sheetMode==='full' ? 'peek' : 'full'; this.applySheet(next, true); this.setState({sheetMode:next}); };
+  toggleSheet = ()=>{ const order=['tab','peek','full']; let i=order.indexOf(this.state.sheetMode); if(i<0) i=0; const next=order[(i+1)%order.length]; this.applySheet(next, true); this.setState({sheetMode:next}); };
   centerStrip(){ if(!this.stripEl || this.state.sheetMode==='full') return; const cw=258; this.stripEl.scrollTo({left:Math.max(0, this.state.selectedIndex*cw - 70), behavior:'smooth'}); }
 
   selectDay = (i)=>{ this.setState({selectedIndex:i}); };
@@ -765,6 +765,7 @@ class NorwayApp extends React.Component {
       arrowIcon:this.iconEl('arrowRight',15), arrowIconSm:this.iconEl('arrowRight',13),
       chevronIcon:this.iconEl('chevronUp',18), chevronLeftIcon:this.iconEl('chevronLeft',18), chevronRightIcon:this.iconEl('chevronRight',14),
       chevronRot: this.state.sheetMode==='full' ? 'rotate(180deg)' : 'rotate(0deg)',
+      sheetHint: this.state.sheetMode==='full' ? '14 days · tap a day to open it' : (this.state.sheetMode==='tab' ? '14 days · tap to browse' : '14 days · tap a day, or expand'),
       clockIconSm:this.iconEl('clock',13), ferryIconSm:this.iconEl('ship',13),
       scheduleIcon:this.iconEl('clock',14), utensilsIcon:this.iconEl('utensils',14),
       bedIcon:this.iconEl('bed',16), shirtIcon:this.iconEl('shirt',15),
@@ -868,12 +869,12 @@ class NorwayApp extends React.Component {
                     </div>
                   )}
                   {V.notDetail && (
-                    <div style={st("display:flex;align-items:center;justify-content:space-between;")}>
+                    <div onClick={V.toggleSheet} style={st("display:flex;align-items:center;justify-content:space-between;cursor:pointer;")}>
                       <div>
                         <div style={st("font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;color:#eef5f4;")}>Itinerary</div>
-                        <div style={st("font-size:11px;color:#7d9396;margin-top:1px;font-weight:500;")}>14 days · tap a day to open it</div>
+                        <div style={st("font-size:11px;color:#7d9396;margin-top:1px;font-weight:500;")}>{V.sheetHint}</div>
                       </div>
-                      <button onPointerDown={V.stop} onClick={V.toggleSheet} style={st("flex:none;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#cfe0e0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .3s;transform:"+V.chevronRot+";")}>{V.chevronIcon}</button>
+                      <button onPointerDown={V.stop} style={st("flex:none;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#cfe0e0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .3s;transform:"+V.chevronRot+";")}>{V.chevronIcon}</button>
                     </div>
                   )}
                 </div>
