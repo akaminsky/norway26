@@ -624,8 +624,7 @@ class NorwayApp extends React.Component {
   removePhoto = (day, pi)=>{ const ov=Object.assign({}, this.state.overrides); const d=Object.assign({}, ov[day]||{}); d.photos=(d.photos||[]).filter((_,i)=>i!==pi); ov[day]=d; this.persist(ov); };
   togglePhotos = (day)=>{ this.setState(s=>({photoOpenDay: s.photoOpenDay===day ? null : day})); };
   resetDay = (day)=>{
-    const ov=Object.assign({}, this.state.overrides); const cur=ov[day];
-    if(cur){ const keep={}; if(cur.photos && cur.photos.length) keep.photos=cur.photos; if(cur.tripLog) keep.tripLog=cur.tripLog; if(Object.keys(keep).length) ov[day]=keep; else delete ov[day]; }
+    const ov=Object.assign({}, this.state.overrides); delete ov[day];
     this.persist(ov);
   };
 
@@ -1015,32 +1014,8 @@ class NorwayApp extends React.Component {
 
                         <div style={st("margin-top:12px;font-size:12.5px;color:#9fb4b6;font-style:italic;line-height:1.4;font-family:'Space Grotesk',sans-serif;")}>“{D.notes}”</div>
 
-                        <div style={st("margin-top:14px;background:rgba(0,0,0,.16);border:1px solid rgba(255,255,255,.05);border-radius:12px;padding:11px 12px;")}>
-                          <div style={st("display:flex;align-items:center;gap:6px;margin-bottom:7px;")}>
-                            <span style={st("color:#4ECDC4;")}>{V.logIcon}</span>
-                            <span style={st("font-size:9.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#7f9498;")}>Trip Log — what actually happened</span>
-                          </div>
-                          <textarea key={D.logKey} defaultValue={D.tripLog} onBlur={D.onTripLog} placeholder="Jot what really happened — weather, detours, the good stuff…" style={st("width:100%;min-height:48px;resize:vertical;background:transparent;border:none;outline:none;color:#dbe7e6;font-size:12.5px;line-height:1.45;font-family:'Inter',sans-serif;")}></textarea>
-                        </div>
-
-                        <div style={st("display:flex;align-items:center;gap:8px;margin-top:12px;")}>
-                          <button onClick={D.onTogglePhotos} style={st("flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);color:#cfe0e0;border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;")}>{V.cameraIcon}{D.photoLabel}</button>
-                          {D.modified && (<button onClick={D.onReset} style={st("flex:none;display:flex;align-items:center;gap:6px;background:rgba(224,138,78,.1);border:1px solid rgba(224,138,78,.3);color:#e8a06a;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:600;cursor:pointer;")}>{V.resetIcon}Reset</button>)}
-                        </div>
-
-                        {D.photoOpen && (
-                          <div className="np-card-anim" style={st("margin-top:11px;display:grid;grid-template-columns:repeat(3,1fr);gap:7px;")}>
-                            {D.photos.map((photo, pi) => (
-                              <div key={pi} style={st("position:relative;aspect-ratio:1;border-radius:11px;overflow:hidden;background:#0c1519;")}>
-                                {photo.imgEl}
-                                <button onClick={photo.onRemove} style={st("position:absolute;top:4px;right:4px;width:21px;height:21px;border-radius:50%;border:none;background:rgba(8,14,18,.78);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;")}>{V.xIconSm}</button>
-                              </div>
-                            ))}
-                            <label style={st("aspect-ratio:1;border-radius:11px;border:1.5px dashed rgba(255,255,255,.16);background:rgba(255,255,255,.025);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;color:#6f8488;")}>
-                              {V.plusIcon}<span style={st("font-size:9px;font-weight:600;letter-spacing:.3px;")}>Add</span>
-                              <input type="file" accept="image/*" onChange={D.onAddPhoto} style={st("display:none;")} />
-                            </label>
-                          </div>
+                        {D.modified && (
+                          <button onClick={D.onReset} style={st("width:100%;margin-top:14px;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(224,138,78,.1);border:1px solid rgba(224,138,78,.3);color:#e8a06a;border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;")}>{V.resetIcon}Reset to original plan</button>
                         )}
                       </div>
                     </div>
@@ -1221,10 +1196,6 @@ class NorwayApp extends React.Component {
                     <div style={st("margin-top:13px;")}>
                       <div style={st(V.labelStyle)}>Notes / vibe</div>
                       <textarea value={Dr.notes} onChange={Dr.onNotes} style={st(V.areaStyle)} />
-                    </div>
-                    <div style={st("margin-top:13px;")}>
-                      <div style={st(V.labelStyle)}>Trip log</div>
-                      <textarea value={Dr.tripLog} onChange={Dr.onLog} placeholder="What actually happened…" style={st(V.areaStyle)} />
                     </div>
                   </div>
                   <div style={st("flex:none;padding:13px 20px calc(22px + env(safe-area-inset-bottom, 0px));display:flex;gap:10px;border-top:1px solid rgba(255,255,255,.07);")}>
