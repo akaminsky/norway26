@@ -11,7 +11,7 @@
      back to the last forecast it saved in local storage).
 
    Bump BUILD on each deploy to force already-installed clients to update. */
-const BUILD = '2026-07-17b';
+const BUILD = '2026-07-17c';
 const CACHE = 'norway-shell-' + BUILD;   // app shell + libraries + fonts
 const TILES = 'norway-tiles-v1';         // map tiles (kept across deploys)
 const TILE_CAP = 700;                    // ~ up to a few hundred MB worst case; trims oldest
@@ -36,7 +36,11 @@ self.addEventListener('install', function (e) {
   self.skipWaiting();
   e.waitUntil((async function () {
     const c = await caches.open(CACHE);
-    await c.addAll(SHELL).catch(function () {});
+    // cache:'reload' bypasses the browser HTTP cache — GitHub Pages serves with
+    // max-age=600, so a plain addAll can bake a stale shell into a fresh deploy.
+    await Promise.all(SHELL.map(function (u) {
+      return fetch(u, { cache: 'reload' }).then(function (r) { return c.put(u, r); }).catch(function () {});
+    }));
     // Best-effort precache of the libraries so the app can boot offline immediately.
     await Promise.all(LIBS.map(function (u) {
       return fetch(u, { mode: 'cors' }).then(function (r) { return c.put(u, r); }).catch(function () {});
@@ -98,7 +102,7 @@ self.addEventListener('fetch', function (e) {
   const isDoc = req.mode === 'navigate' || (req.headers.get('accept') || '').indexOf('text/html') !== -1;
   if (isDoc) {
     e.respondWith(
-      fetch(req).then(function (res) {
+      fetch(req, { cache: 'no-cache' }).then(function (res) {
         const copy = res.clone();
         caches.open(CACHE).then(function (c) { c.put('./index.html', copy); });
         return res;
