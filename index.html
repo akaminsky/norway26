@@ -409,7 +409,9 @@ class NorwayApp extends React.Component {
       }
       el.style.display = visible ? '' : 'none';
     };
-    this.markers.forEach(o => apply(o, s.showStays, o.days));
+    // PLACES pins carry their kind (teal stays vs orange activities); user-added
+    // activity pins live in actMarkers and are always orange.
+    this.markers.forEach(o => apply(o, o.kind==='stay' ? s.showStays : s.showActivities, o.days));
     (this.actMarkers||[]).forEach(o => apply(o, s.showActivities, [o.day]));
   }
   // Give today's pin(s) a slightly larger halo and a higher z-index so they're
@@ -418,9 +420,13 @@ class NorwayApp extends React.Component {
     const tdy = this.computeToday();
     const td = tdy.isToday ? (tdy.idx + 1) : -1;
     const tag = (arr, matches) => (arr||[]).forEach(o => {
+      const on = matches(o);
+      // Leaflet stacks markers by their wrapper element, so raising the inner
+      // div's z-index isn't enough — bump the marker's own z-index offset.
+      o.m.setZIndexOffset(on ? 1000 : 0);
       const el = o.m.getElement(); if(!el) return;
       const pin = el.querySelector('.np-pin'); if(!pin) return;
-      pin.classList.toggle('today', matches(o));
+      pin.classList.toggle('today', on);
     });
     tag(this.markers, o => o.days.indexOf(td) >= 0);
     tag(this.actMarkers, o => o.day === td);
