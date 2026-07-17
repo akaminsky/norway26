@@ -947,15 +947,7 @@ class NorwayApp extends React.Component {
       };
     }
 
-    // Distance from the live GPS position to today's destination (straight-line;
-    // the map itself shows the real roads).
     const pos = this.state.pos;
-    let locChip = null;
-    if(pos && t && t.coord){
-      const dk = this.distKm(pos.c, t.coord);
-      locChip = {label: '≈ ' + (dk<1 ? (Math.round(dk*1000)+' m') : this.fmtKm(dk)) + ' to ' + t.to};
-    }
-
     const rate = this.fxRate();
     const amtN = parseFloat(String(this.state.fxAmt).replace(',','.'));
     const okAmt = isFinite(amtN);
@@ -988,7 +980,7 @@ class NorwayApp extends React.Component {
 
     return {
       days, today, detail, detailOpen, notDetail:!detailOpen, info,
-      locChip, onLocate:this.onLocate, locateIcon:this.iconEl('locate',17),
+      onLocate:this.onLocate, locateIcon:this.iconEl('locate',17),
       locateColor: pos ? '#4A90E2' : '#cfe0e0',
       listOpen: !detailOpen,
       online:this.state.online, offline:!this.state.online,
@@ -1092,9 +1084,6 @@ class NorwayApp extends React.Component {
 
             <button onClick={V.info.onOpen} style={st("position:absolute;right:12px;bottom:calc(env(safe-area-inset-bottom, 0px) + 82px);z-index:5;width:40px;height:40px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(14,26,32,.82);backdrop-filter:blur(8px);box-shadow:0 8px 20px -8px rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;padding:0;line-height:1;")}>🇳🇴</button>
             <button onClick={V.onLocate} style={st("position:absolute;right:12px;bottom:calc(env(safe-area-inset-bottom, 0px) + 130px);z-index:5;width:40px;height:40px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(14,26,32,.82);backdrop-filter:blur(8px);box-shadow:0 8px 20px -8px rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;color:"+V.locateColor+";")}>{V.locateIcon}</button>
-            {V.locChip && (
-              <div style={st("position:absolute;right:60px;bottom:calc(env(safe-area-inset-bottom, 0px) + 137px);z-index:5;background:rgba(14,26,32,.82);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:5px 9px;font-size:10.5px;color:#cdd9d8;font-weight:600;box-shadow:0 8px 20px -8px rgba(0,0,0,.6);white-space:nowrap;")}>{V.locChip.label}</div>
-            )}
 
             <div ref={V.setSheetRef} style={st("position:absolute;left:0;right:0;bottom:0;height:100%;z-index:8;transform:translateY(calc(100% - 188px));will-change:transform;")}>
               <div style={st("height:100%;background:linear-gradient(180deg,#13222a,#0e1a20);border-radius:26px 26px 0 0;box-shadow:0 -16px 44px -10px rgba(0,0,0,.66),inset 0 1px 0 rgba(255,255,255,.06);border-top:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;overflow:hidden;")}>
