@@ -35,6 +35,9 @@
   .np-pin .np-pin-dot{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#08141a;box-shadow:0 0 0 2.5px rgba(10,18,24,.92),0 3px 8px rgba(0,0,0,.5);}
   .np-pin.active{transform:scale(1.22);z-index:1200;}
   .np-pin.active .np-pin-dot{animation:nppulse 1.7s infinite;}
+  .np-pin.today{transform:scale(1.18);z-index:1100;}
+  .np-pin.today.active{transform:scale(1.30);z-index:1200;}
+  .np-pin.today .np-pin-dot{box-shadow:0 0 0 2.5px rgba(10,18,24,.92),0 0 0 4.5px rgba(255,255,255,.55),0 5px 12px rgba(0,0,0,.6);}
   .leaflet-container{background:#0a1318;font-family:'Inter',sans-serif;outline:none;}
   .leaflet-control-attribution{background:rgba(8,16,20,.55)!important;color:#6f8488!important;font-size:9px!important;backdrop-filter:blur(4px);}
   .leaflet-control-attribution a{color:#8aa0a3!important;}
@@ -236,7 +239,10 @@ class NorwayApp extends React.Component {
     online: (typeof navigator !== 'undefined') ? navigator.onLine : true,
     editing: false, editIndex: null, editDraft: null,
     photoOpenDay: null, geo: {},
-    weather: (function(k){ try { const c=JSON.parse(localStorage.getItem(k)||'null'); return (c&&c.data)?c.data:{}; } catch(e){ return {}; } })('norway_weather_v1')
+    weather: (function(k){ try { const c=JSON.parse(localStorage.getItem(k)||'null'); return (c&&c.data)?c.data:{}; } catch(e){ return {}; } })('norway_weather_v1'),
+    // Map filters — the legend doubles as an interactive filter panel. Both kinds
+    // visible by default, "only today" off.
+    showStays: true, showActivities: true, todayOnly: false
   };
 
   accent(){ return '#4ECDC4'; }
@@ -371,6 +377,7 @@ class NorwayApp extends React.Component {
     const L = window.L;
     if(!this.actLayer) this.actLayer = L.layerGroup().addTo(this.map);
     this.actLayer.clearLayers();
+    this.actMarkers = [];
     this.mergedDays().forEach(d=>{
       (d.activities||[]).forEach(a=>{
         if(a.coord && a.coord.length===2){
@@ -378,10 +385,49 @@ class NorwayApp extends React.Component {
           const icon = L.divIcon({html, className:'', iconSize:[28,28], iconAnchor:[14,14], tooltipAnchor:[0,-13]});
           const m = L.marker(a.coord, {icon}).addTo(this.actLayer);
           m.bindPopup(this.pinCard(a.text||'Activity', [d.day], 'activity'), {className:'np-pop', closeButton:false, offset:[0,-2], autoPanPaddingTopLeft:[18,180], autoPanPaddingBottomRight:[18,110]});
+          this.actMarkers.push({m, day:d.day});
         }
       });
     });
+    this.applyFilters();
+    this.updateTodayHighlight();
   }
+
+  // Hide/show pins by kind and by "today only". Uses inline display so we don't
+  // have to swap Leaflet layers.
+  applyFilters(){
+    if(!this.markers) return;
+    const s = this.state;
+    const tdy = this.computeToday();
+    const todayDay = tdy.idx + 1;
+    const apply = (o, kindOn, days) => {
+      const el = o.m.getElement();
+      if(!el) return;
+      let visible = kindOn;
+      if(visible && s.todayOnly){
+        visible = days.indexOf(todayDay) >= 0;
+      }
+      el.style.display = visible ? '' : 'none';
+    };
+    this.markers.forEach(o => apply(o, s.showStays, o.days));
+    (this.actMarkers||[]).forEach(o => apply(o, s.showActivities, [o.day]));
+  }
+  // Give today's pin(s) a slightly larger halo and a higher z-index so they're
+  // never hidden under a neighbor.
+  updateTodayHighlight(){
+    const tdy = this.computeToday();
+    const td = tdy.isToday ? (tdy.idx + 1) : -1;
+    const tag = (arr, matches) => (arr||[]).forEach(o => {
+      const el = o.m.getElement(); if(!el) return;
+      const pin = el.querySelector('.np-pin'); if(!pin) return;
+      pin.classList.toggle('today', matches(o));
+    });
+    tag(this.markers, o => o.days.indexOf(td) >= 0);
+    tag(this.actMarkers, o => o.day === td);
+  }
+  toggleStays = () => this.setState(s => ({showStays: !s.showStays}));
+  toggleActivities = () => this.setState(s => ({showActivities: !s.showActivities}));
+  toggleTodayOnly = () => this.setState(s => ({todayOnly: !s.todayOnly}));
 
   mergedDays(){
     const ov = this.state.overrides || {};
@@ -446,6 +492,11 @@ class NorwayApp extends React.Component {
       this._ovRef = this.state.overrides;
       this.refreshActivityMarkers();
     }
+    const fsig = this.state.showStays + '|' + this.state.showActivities + '|' + this.state.todayOnly;
+    if(this._prevFilter !== fsig){
+      this._prevFilter = fsig;
+      this.applyFilters();
+    }
   }
 
   waitForL(cb, n){ n=n||0; if(window.L) return cb(); if(n>80) return; setTimeout(()=>this.waitForL(cb, n+1), 60); }
@@ -464,10 +515,18 @@ class NorwayApp extends React.Component {
     this.buildMarkers(L, map);
     this.refreshActivityMarkers();
     this._ovRef = this.state.overrides;
-    const b = L.latLngBounds(this.ROUTE);
-    map.fitBounds(b, {paddingTopLeft:[26,170], paddingBottomRight:[26,96]});
+    // If the trip is underway, open on today's stop; otherwise show the whole route.
+    const tdy = this.computeToday();
+    const dd = tdy.isToday ? this.DEFAULTS[tdy.idx] : null;
+    if(dd && dd.onMap !== false){
+      const z = (tdy.idx === 12) ? 6.2 : 9.2;
+      map.setView(dd.coord, z);
+    } else {
+      const b = L.latLngBounds(this.ROUTE);
+      map.fitBounds(b, {paddingTopLeft:[26,170], paddingBottomRight:[26,96]});
+    }
     setTimeout(()=>map.invalidateSize(), 280);
-    setTimeout(()=>{ this.updateActive(); }, 350);
+    setTimeout(()=>{ this.updateActive(); this.updateTodayHighlight(); this.applyFilters(); }, 350);
   }
   buildRoute(L, map){
     const R = this.ROUTE, ac = this.accent();
@@ -487,7 +546,7 @@ class NorwayApp extends React.Component {
       const m = L.marker(p.c, {icon}).addTo(map);
       // Every pin → a peek card next to it; tap the card to open the full day.
       m.bindPopup(this.pinCard(p.n, p.days, p.kind), {className:'np-pop', closeButton:false, offset:[0,-2], autoPanPaddingTopLeft:[18,180], autoPanPaddingBottomRight:[18,110]});
-      this.markers.push({m, days:p.days});
+      this.markers.push({m, days:p.days, kind:p.kind});
     });
   }
   pinCard(name, days, kind){
@@ -827,6 +886,8 @@ class NorwayApp extends React.Component {
       satBtnStyle: segStyle(this.state.mapStyle==='satellite'),
       terrBtnStyle: segStyle(this.state.mapStyle==='terrain'),
       streetBtnStyle: segStyle(this.state.mapStyle==='street'),
+      showStays: this.state.showStays, showActs: this.state.showActivities, todayOnly: this.state.todayOnly,
+      onToggleStays: this.toggleStays, onToggleActs: this.toggleActivities, onToggleTodayOnly: this.toggleTodayOnly,
       editing:this.state.editing, draft, labelStyle, inputStyle, areaStyle,
       closeEdit:this.closeEdit, saveEdit:this.saveEdit
     };
@@ -893,9 +954,11 @@ class NorwayApp extends React.Component {
               </div>
             </div>
 
-            <div style={st("position:absolute;left:12px;bottom:calc(env(safe-area-inset-bottom, 0px) + 82px);z-index:5;pointer-events:none;background:rgba(14,26,32,.82);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:8px 11px;display:flex;flex-direction:column;gap:6px;box-shadow:0 8px 20px -8px rgba(0,0,0,.6);")}>
-              <div style={st("display:flex;align-items:center;gap:7px;")}><span style={st("width:12px;height:12px;border-radius:50%;background:#4ECDC4;flex:none;box-shadow:0 0 0 1.5px rgba(10,18,24,.9);")}></span><span style={st("font-size:10.5px;color:#cdd9d8;font-weight:600;")}>Overnight stay</span></div>
-              <div style={st("display:flex;align-items:center;gap:7px;")}><span style={st("width:12px;height:12px;border-radius:50%;background:#F2A54E;flex:none;box-shadow:0 0 0 1.5px rgba(10,18,24,.9);")}></span><span style={st("font-size:10.5px;color:#cdd9d8;font-weight:600;")}>Day’s activity</span></div>
+            <div style={st("position:absolute;left:12px;bottom:calc(env(safe-area-inset-bottom, 0px) + 82px);z-index:5;pointer-events:auto;background:rgba(14,26,32,.82);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:8px 11px;display:flex;flex-direction:column;gap:6px;box-shadow:0 8px 20px -8px rgba(0,0,0,.6);")}>
+              <div onClick={V.onToggleStays} style={st("display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;opacity:"+(V.showStays?'1':'.4')+";transition:opacity .18s;")}><span style={st("width:12px;height:12px;border-radius:50%;background:#4ECDC4;flex:none;box-shadow:0 0 0 1.5px rgba(10,18,24,.9);")}></span><span style={st("font-size:10.5px;color:#cdd9d8;font-weight:600;")}>Overnight stay</span></div>
+              <div onClick={V.onToggleActs} style={st("display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;opacity:"+(V.showActs?'1':'.4')+";transition:opacity .18s;")}><span style={st("width:12px;height:12px;border-radius:50%;background:#F2A54E;flex:none;box-shadow:0 0 0 1.5px rgba(10,18,24,.9);")}></span><span style={st("font-size:10.5px;color:#cdd9d8;font-weight:600;")}>Day’s activity</span></div>
+              <div style={st("height:1px;background:rgba(255,255,255,.08);margin:1px 0;")}></div>
+              <div onClick={V.onToggleTodayOnly} style={st("display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;")}><span style={st("width:12px;height:12px;border-radius:3px;border:1.5px solid #4ECDC4;background:"+(V.todayOnly?'#4ECDC4':'transparent')+";flex:none;display:flex;align-items:center;justify-content:center;color:#06181a;font-size:9px;font-weight:800;line-height:1;")}>{V.todayOnly ? '✓' : ''}</span><span style={st("font-size:10.5px;color:"+(V.todayOnly?'#7fe0d8':'#cdd9d8')+";font-weight:600;")}>Only today</span></div>
               <div style={st("display:flex;align-items:center;gap:7px;")}><span style={st("width:14px;height:3px;border-radius:2px;background:#4ECDC4;flex:none;")}></span><span style={st("font-size:10.5px;color:#cdd9d8;font-weight:600;")}>Route · numbered by day</span></div>
             </div>
 
