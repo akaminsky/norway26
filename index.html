@@ -38,6 +38,8 @@
   .np-pin.today{transform:scale(1.18);z-index:1100;}
   .np-pin.today.active{transform:scale(1.30);z-index:1200;}
   .np-pin.today .np-pin-dot{box-shadow:0 0 0 2.5px rgba(10,18,24,.92),0 0 0 4.5px rgba(255,255,255,.55),0 5px 12px rgba(0,0,0,.6);}
+  @keyframes npmepulse{0%{box-shadow:0 0 0 2.5px rgba(255,255,255,.95),0 0 0 0 rgba(74,144,226,.5)}70%{box-shadow:0 0 0 2.5px rgba(255,255,255,.95),0 0 0 12px rgba(74,144,226,0)}100%{box-shadow:0 0 0 2.5px rgba(255,255,255,.95),0 0 0 0 rgba(74,144,226,0)}}
+  .np-me{width:15px;height:15px;border-radius:50%;background:#4A90E2;box-shadow:0 0 0 2.5px rgba(255,255,255,.95);animation:npmepulse 2s infinite;}
   .leaflet-container{background:#0a1318;font-family:'Inter',sans-serif;outline:none;}
   .leaflet-control-attribution{background:rgba(8,16,20,.55)!important;color:#6f8488!important;font-size:9px!important;backdrop-filter:blur(4px);}
   .leaflet-control-attribution a{color:#8aa0a3!important;}
@@ -150,7 +152,8 @@ class NorwayApp extends React.Component {
     arrowRight:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
     wifiOff:'<path d="M12 20h.01"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/><path d="M5 12.86a10 10 0 0 1 5.17-2.69"/><path d="M19 12.86a10 10 0 0 0-2.01-1.52"/><path d="M2 8.82a15 15 0 0 1 4.18-2.64"/><path d="M22 8.82a15 15 0 0 0-11.29-3.76"/><path d="m2 2 20 20"/>',
     external:'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
-    notebook:'<path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M16 2v20"/>'
+    notebook:'<path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M16 2v20"/>',
+    locate:'<circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/>'
   };
   TYPES = [
     {key:'hike', label:'Hike', icon:'mountain', fields:['distance','duration']},
@@ -247,7 +250,7 @@ class NorwayApp extends React.Component {
     showStays: true, showActivities: true, todayOnly: false,
     // Norway cheat sheet (info panel) + EUR↔NOK converter. The cached ECB rate
     // persists so the converter works offline in the fjords.
-    infoOpen: false, fxAmt: '10', fxSide: 'eur',
+    infoOpen: false, fxAmt: '10', fxSide: 'eur', pos: null,
     fx: (function(k){ try { const c=JSON.parse(localStorage.getItem(k)||'null'); return (c&&c.rate)?c:null; } catch(e){ return null; } })('norway_fx_v1')
   };
 
@@ -376,6 +379,51 @@ class NorwayApp extends React.Component {
     return React.createElement('span', {style:{display:'inline-flex',alignItems:'center'}, dangerouslySetInnerHTML:{__html:this.iconSvg(name, size||18)}});
   }
   fmtKm(km){ if(this.units()==='mi') return Math.round(km*0.6214)+' mi'; return Math.round(km)+' km'; }
+  distKm(a, b){
+    const R=6371, toR=x=>x*Math.PI/180;
+    const dLat=toR(b[0]-a[0]), dLon=toR(b[1]-a[1]);
+    const s=Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toR(a[0]))*Math.cos(toR(b[0]))*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return 2*R*Math.asin(Math.sqrt(s));
+  }
+
+  // Live "you are here": watch the device position, keep a pulsing blue dot +
+  // accuracy circle on the map. Marker moves are imperative (cheap, every GPS
+  // tick); React state only updates every few seconds for the distance chip.
+  startGeo(){
+    if(this._geoWatch!=null || !('geolocation' in navigator)) return;
+    try {
+      this._geoWatch = navigator.geolocation.watchPosition(
+        p=>this.onGeoFix(p),
+        ()=>{},
+        {enableHighAccuracy:true, maximumAge:5000, timeout:30000}
+      );
+    } catch(_){}
+  }
+  onGeoFix(p){
+    const c=[p.coords.latitude, p.coords.longitude], acc=p.coords.accuracy||0;
+    this._pos = {c, acc};
+    this.updateMeMarker(c, acc);
+    const now=Date.now();
+    if(!this._posT || now-this._posT>5000){ this._posT=now; this.setState({pos:{c, acc}}); }
+    if(this._centerOnFix){ this._centerOnFix=false; if(this.map) this.map.flyTo(c, Math.max(this.map.getZoom(), 11), {duration:.8}); }
+  }
+  updateMeMarker(c, acc){
+    if(!this.map || !window.L) return;
+    const L = window.L;
+    if(!this.meMarker){
+      const icon = L.divIcon({html:'<div class="np-me"></div>', className:'', iconSize:[15,15], iconAnchor:[7.5,7.5]});
+      this.meMarker = L.marker(c, {icon, zIndexOffset:1500, interactive:false}).addTo(this.map);
+      this.meCircle = L.circle(c, {radius:acc, color:'#4A90E2', weight:1, opacity:.3, fillColor:'#4A90E2', fillOpacity:.08, interactive:false}).addTo(this.map);
+    } else {
+      this.meMarker.setLatLng(c);
+      this.meCircle.setLatLng(c); this.meCircle.setRadius(acc);
+    }
+  }
+  onLocate = ()=>{
+    const p = this._pos || this.state.pos;
+    if(p && this.map){ this.map.flyTo(p.c, Math.max(this.map.getZoom(), 11), {duration:.8}); }
+    else { this._centerOnFix = true; this.startGeo(); }
+  };
   mapQuery(text){
     let t = String(text||'');
     t = t.replace(/^optional:\s*/i,'').replace(/^hike\s+/i,'').replace(/^glacier hike on\s+/i,'').replace(/^drive day\s*[—–-]\s*/i,'').replace(/\brestock in\s+/i,'').replace(/\s+if time allows$/i,'').replace(/\s*\(.*?\)\s*$/,'').replace(/\s+[—–]\s+.*$/,'').split(/\s\+\s/)[0].trim();
@@ -509,6 +557,7 @@ class NorwayApp extends React.Component {
     window.removeEventListener('offline', this._onDown);
     if(this._onVis) document.removeEventListener('visibilitychange', this._onVis);
     if(this._onKey) window.removeEventListener('keydown', this._onKey);
+    if(this._geoWatch!=null && 'geolocation' in navigator) navigator.geolocation.clearWatch(this._geoWatch);
   }
   componentDidUpdate(){
     if(this._prevSel == null){ this._prevSel = this.state.selectedIndex; this._prevSheet = this.state.sheetMode; }
@@ -564,6 +613,7 @@ class NorwayApp extends React.Component {
     }
     setTimeout(()=>map.invalidateSize(), 280);
     setTimeout(()=>{ this.updateActive(); this.updateTodayHighlight(); this.applyFilters(); }, 350);
+    this.startGeo();
   }
   buildRoute(L, map){
     const R = this.ROUTE, ac = this.accent();
@@ -897,6 +947,15 @@ class NorwayApp extends React.Component {
       };
     }
 
+    // Distance from the live GPS position to today's destination (straight-line;
+    // the map itself shows the real roads).
+    const pos = this.state.pos;
+    let locChip = null;
+    if(pos && t && t.coord){
+      const dk = this.distKm(pos.c, t.coord);
+      locChip = {label: '≈ ' + (dk<1 ? (Math.round(dk*1000)+' m') : this.fmtKm(dk)) + ' to ' + t.to};
+    }
+
     const rate = this.fxRate();
     const amtN = parseFloat(String(this.state.fxAmt).replace(',','.'));
     const okAmt = isFinite(amtN);
@@ -929,6 +988,8 @@ class NorwayApp extends React.Component {
 
     return {
       days, today, detail, detailOpen, notDetail:!detailOpen, info,
+      locChip, onLocate:this.onLocate, locateIcon:this.iconEl('locate',17),
+      locateColor: pos ? '#4A90E2' : '#cfe0e0',
       listOpen: !detailOpen,
       online:this.state.online, offline:!this.state.online,
       wifiOffIcon:this.iconEl('wifiOff',10),
@@ -1030,6 +1091,10 @@ class NorwayApp extends React.Component {
             </div>
 
             <button onClick={V.info.onOpen} style={st("position:absolute;right:12px;bottom:calc(env(safe-area-inset-bottom, 0px) + 82px);z-index:5;width:40px;height:40px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(14,26,32,.82);backdrop-filter:blur(8px);box-shadow:0 8px 20px -8px rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;padding:0;line-height:1;")}>🇳🇴</button>
+            <button onClick={V.onLocate} style={st("position:absolute;right:12px;bottom:calc(env(safe-area-inset-bottom, 0px) + 130px);z-index:5;width:40px;height:40px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(14,26,32,.82);backdrop-filter:blur(8px);box-shadow:0 8px 20px -8px rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;color:"+V.locateColor+";")}>{V.locateIcon}</button>
+            {V.locChip && (
+              <div style={st("position:absolute;right:60px;bottom:calc(env(safe-area-inset-bottom, 0px) + 137px);z-index:5;background:rgba(14,26,32,.82);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:5px 9px;font-size:10.5px;color:#cdd9d8;font-weight:600;box-shadow:0 8px 20px -8px rgba(0,0,0,.6);white-space:nowrap;")}>{V.locChip.label}</div>
+            )}
 
             <div ref={V.setSheetRef} style={st("position:absolute;left:0;right:0;bottom:0;height:100%;z-index:8;transform:translateY(calc(100% - 188px));will-change:transform;")}>
               <div style={st("height:100%;background:linear-gradient(180deg,#13222a,#0e1a20);border-radius:26px 26px 0 0;box-shadow:0 -16px 44px -10px rgba(0,0,0,.66),inset 0 1px 0 rgba(255,255,255,.06);border-top:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;overflow:hidden;")}>
