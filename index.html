@@ -689,16 +689,42 @@ class NorwayApp extends React.Component {
     this.sheetEl.style.transform = 'translateY('+ty+'px)';
     this.curTy = ty;
   }
+  trackVel(e, reset){
+    if(reset || !this._samples) this._samples = [];
+    this._samples.push({t:e.timeStamp, y:e.clientY});
+    while(this._samples.length > 2 && e.timeStamp - this._samples[0].t > 120) this._samples.shift();
+  }
+  dragVelocity(){
+    const s = this._samples;
+    if(!s || s.length < 2) return 0;
+    const a = s[0], b = s[s.length-1], dt = b.t - a.t;
+    return dt > 0 ? (b.y - a.y) / dt : 0;   // px/ms, positive = downward
+  }
+  snapSheet(){
+    const t = this.snapTargets(); if(!t) return;
+    // A quick flick wins on direction regardless of distance; otherwise snap
+    // to whichever state is nearer.
+    const v = this.dragVelocity();
+    let mode;
+    if(Math.abs(v) > 0.35) mode = v > 0 ? 'tab' : 'full';
+    else mode = (Math.abs(t.full - this.curTy) <= Math.abs(t.tab - this.curTy)) ? 'full' : 'tab';
+    this.applySheet(mode, true);
+    this.setState({sheetMode:mode});
+  }
   onSheetDown = (e)=>{
     const t = this.snapTargets(); if(!t) return;
     this.dragging = true; this.startY = e.clientY;
     this.startTy = (this.curTy!=null) ? this.curTy : t.peek;
+    this._dragMoved = false;
+    this.trackVel(e, true);
     this.sheetEl.style.transition = 'none';
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_){}
   };
   onSheetMove = (e)=>{
     if(!this.dragging) return;
     const t = this.snapTargets(); if(!t) return;
+    if(Math.abs(e.clientY - this.startY) > 8) this._dragMoved = true;
+    this.trackVel(e);
     let ty = this.startTy + (e.clientY - this.startY);
     ty = Math.max(t.full, Math.min(t.H-150, ty));
     this.sheetEl.style.transform = 'translateY('+ty+'px)';
@@ -707,19 +733,50 @@ class NorwayApp extends React.Component {
   onSheetUp = (e)=>{
     if(!this.dragging) return;
     this.dragging = false;
+    if(this._dragMoved) this._dragEndT = Date.now();
+    this.snapSheet();
+  };
+  // Pull-to-close: when the itinerary list is scrolled to the top, dragging
+  // down grabs the whole sheet instead of rubber-banding the list.
+  onListDown = (e)=>{
+    this._lp = {y:e.clientY, top:(this.listEl ? this.listEl.scrollTop : 1), pulling:false};
+    this.trackVel(e, true);
+  };
+  onListMove = (e)=>{
+    const lp = this._lp; if(!lp) return;
+    const dy = e.clientY - lp.y;
+    this.trackVel(e);
+    if(!lp.pulling){
+      if(lp.top <= 0 && this.listEl && this.listEl.scrollTop <= 0 && dy > 8){
+        const t = this.snapTargets(); if(!t){ this._lp = null; return; }
+        lp.pulling = true;
+        lp.baseTy = (this.curTy!=null) ? this.curTy : t.full;
+        this.sheetEl.style.transition = 'none';
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_){}
+      } else if(Math.abs(dy) > 12){
+        this._lp = null;   // it's a normal list scroll — leave it alone
+        return;
+      } else return;
+    }
+    if(e.cancelable) e.preventDefault();
     const t = this.snapTargets(); if(!t) return;
-    const opts = [['full',t.full],['tab',t.tab]];
-    let best = opts[0], bd = 1e9;
-    opts.forEach(o=>{ const dd=Math.abs(o[1]-this.curTy); if(dd<bd){ bd=dd; best=o; } });
-    this.applySheet(best[0], true);
-    this.setState({sheetMode:best[0]});
+    let ty = lp.baseTy + Math.max(0, dy - 8);
+    ty = Math.max(t.full, Math.min(t.H-150, ty));
+    this.sheetEl.style.transform = 'translateY('+ty+'px)';
+    this.curTy = ty;
+  };
+  onListUp = ()=>{
+    const lp = this._lp; this._lp = null;
+    if(!lp || !lp.pulling) return;
+    this._dragEndT = Date.now();
+    this.snapSheet();
   };
   stop = (e)=>{ e.stopPropagation(); };
-  toggleSheet = ()=>{ const next = this.state.sheetMode==='full' ? 'tab' : 'full'; this.applySheet(next, true); this.setState({sheetMode:next}); };
+  toggleSheet = ()=>{ if(this._dragEndT && Date.now()-this._dragEndT < 350) return; const next = this.state.sheetMode==='full' ? 'tab' : 'full'; this.applySheet(next, true); this.setState({sheetMode:next}); };
   centerStrip(){ if(!this.stripEl || this.state.sheetMode==='full') return; const cw=258; this.stripEl.scrollTo({left:Math.max(0, this.state.selectedIndex*cw - 70), behavior:'smooth'}); }
 
   selectDay = (i)=>{ this.setState({selectedIndex:i}); };
-  openDetail = (i)=>{ if(this.state.detailDay==null) this._detailFrom = this.state.sheetMode; this.setState({detailDay:i, selectedIndex:i, sheetMode:'full'}); };
+  openDetail = (i)=>{ if(this._dragEndT && Date.now()-this._dragEndT < 350) return; if(this.state.detailDay==null) this._detailFrom = this.state.sheetMode; this.setState({detailDay:i, selectedIndex:i, sheetMode:'full'}); };
   onBack = ()=>{ const back = this._detailFrom || 'peek'; this.setState({detailDay:null, sheetMode:back}); };
   setDetailCard = (el)=>{ this.detailCardEl = el; };
   onDetailDown = (e)=>{
@@ -778,6 +835,7 @@ class NorwayApp extends React.Component {
   };
 
   openEdit = (i)=>{
+    if(this._dragEndT && Date.now()-this._dragEndT < 350) return;
     const d = this.mergedDays()[i];
     const m = d.meals || {};
     const draft = {day:d.day, from:d.from, to:d.to, drivingTime:d.drivingTime, drivingKm:d.drivingKm, ferry:!!d.ferry, accommodation:d.accommodation, status:d.status, notes:d.notes, tripLog:d.tripLog, meals:{b:m.b||'', l:m.l||'', d:m.d||''}, activities:d.activities.map(a=>Object.assign({}, a))};
@@ -1003,6 +1061,7 @@ class NorwayApp extends React.Component {
       trashIconSm:this.iconEl('trash',13),
       setSheetRef:this.setSheetRef, setStripRef:this.setStripRef, setListRef:this.setListRef,
       onSheetDown:this.onSheetDown, onSheetMove:this.onSheetMove, onSheetUp:this.onSheetUp,
+      onListDown:this.onListDown, onListMove:this.onListMove, onListUp:this.onListUp,
       toggleSheet:this.toggleSheet, stop:this.stop, onBack:this.onBack,
       onDetailDown:this.onDetailDown, onDetailMove:this.onDetailMove, onDetailUp:this.onDetailUp, setDetailCard:this.setDetailCard, onStripWheel:this.onStripWheel,
       onSat:()=>this.setStyle('satellite'), onTerr:()=>this.setStyle('terrain'), onStreet:()=>this.setStyle('street'),
@@ -1109,7 +1168,7 @@ class NorwayApp extends React.Component {
                         <div style={st("font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;color:#eef5f4;")}>Itinerary</div>
                         <div style={st("font-size:11px;color:#7d9396;margin-top:1px;font-weight:500;")}>{V.sheetHint}</div>
                       </div>
-                      <button onPointerDown={V.stop} style={st("flex:none;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#cfe0e0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .3s;transform:"+V.chevronRot+";")}>{V.chevronIcon}</button>
+                      <button style={st("flex:none;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#cfe0e0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .3s;transform:"+V.chevronRot+";")}>{V.chevronIcon}</button>
                     </div>
                   )}
                 </div>
@@ -1216,7 +1275,7 @@ class NorwayApp extends React.Component {
                 )}
 
                 {V.listOpen && (
-                  <div className="np-scroll" ref={V.setListRef} style={st("flex:1;overflow-y:auto;padding:4px 14px calc(30px + env(safe-area-inset-bottom, 0px));")}>
+                  <div className="np-scroll" ref={V.setListRef} onPointerDown={V.onListDown} onPointerMove={V.onListMove} onPointerUp={V.onListUp} onPointerCancel={V.onListUp} style={st("flex:1;overflow-y:auto;padding:4px 14px calc(30px + env(safe-area-inset-bottom, 0px));overscroll-behavior:none;touch-action:pan-y;")}>
                     {V.days.map((day) => (
                       <div key={day.day} data-day={day.day} onClick={day.onOpen} style={st("border-radius:16px;border:1px solid "+day.cardBorder+";padding:13px;margin-bottom:11px;cursor:pointer;background:linear-gradient(180deg,#1a2b33,#15242b);box-shadow:0 8px 22px -16px rgba(0,0,0,.8);")}>
                         <div style={st("display:flex;align-items:center;gap:11px;")}>
