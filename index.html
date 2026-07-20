@@ -115,6 +115,7 @@ class NorwayApp extends React.Component {
   KEY = 'norway_fjords_v1';
   WKEY = 'norway_weather_v1';
   FXKEY = 'norway_fx_v1';
+  RKEY = 'norway_roads_v1';
   ICONS = {
     navigation:'<polygon points="3 11 22 2 13 21 11 13 3 11"/>',
     mountain:'<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>',
@@ -533,7 +534,7 @@ class NorwayApp extends React.Component {
   }
 
   componentDidMount(){
-    this._onUp = ()=>{ this.setState({online:true}); this.fetchWeather(); this.fetchFx(); };
+    this._onUp = ()=>{ this.setState({online:true}); this.fetchWeather(); this.fetchFx(); this.loadRoadRoutes(); };
     this._onDown = ()=>this.setState({online:false});
     window.addEventListener('online', this._onUp);
     window.addEventListener('offline', this._onDown);
@@ -616,11 +617,60 @@ class NorwayApp extends React.Component {
     setTimeout(()=>map.invalidateSize(), 280);
     setTimeout(()=>{ this.updateActive(); this.updateTodayHighlight(); this.applyFilters(); }, 350);
     this.startGeo();
+    this.loadRoadRoutes();
   }
   buildRoute(L, map){
+    // Each leg starts as a straight line and is upgraded in place to the real
+    // road geometry when OSRM data arrives (loadRoadRoutes).
     const R = this.ROUTE, ac = this.accent();
-    for(let i=1;i<R.length;i++){ L.polyline([R[i-1],R[i]], {color:'#04101a', weight:8, opacity:.5, lineCap:'round'}).addTo(map); }
-    for(let i=1;i<R.length;i++){ L.polyline([R[i-1],R[i]], {color:ac, weight:4, opacity:.95, lineCap:'round'}).addTo(map); }
+    this.routeLegs = [];
+    for(let i=1;i<R.length;i++){ this.routeLegs.push({casing: L.polyline([R[i-1],R[i]], {color:'#04101a', weight:8, opacity:.5, lineCap:'round', lineJoin:'round'}).addTo(map)}); }
+    for(let i=1;i<R.length;i++){ this.routeLegs[i-1].line = L.polyline([R[i-1],R[i]], {color:ac, weight:4, opacity:.95, lineCap:'round', lineJoin:'round'}).addTo(map); }
+  }
+  setLegGeometry(i, latlngs){
+    const leg = this.routeLegs && this.routeLegs[i]; if(!leg) return;
+    leg.casing.setLatLngs(latlngs); leg.line.setLatLngs(latlngs);
+  }
+  legKey(a, b){ const r=x=>x.toFixed(4); return r(a[0])+','+r(a[1])+'|'+r(b[0])+','+r(b[1]); }
+  // Road-following route: fetch each leg's driving geometry from the public
+  // OSRM server (includes ferry links), cache it in localStorage keyed by the
+  // leg's endpoints — so it works offline once loaded, and a moved stay pin
+  // invalidates only its own legs. Straight lines remain the fallback.
+  loadRoadRoutes(){
+    if(this._roadsBusy || !this.map) return; this._roadsBusy = true;
+    let cache; try { cache = JSON.parse(localStorage.getItem(this.RKEY)||'{}'); } catch(_){ cache = {}; }
+    const R = this.ROUTE;
+    let dirty = false;
+    const legs = [];
+    for(let i=1;i<R.length;i++) legs.push({i:i-1, a:R[i-1], b:R[i], key:this.legKey(R[i-1],R[i])});
+    const apply = (l, pts)=>{ this.setLegGeometry(l.i, [l.a].concat(pts).concat([l.b])); };
+    const step = (k)=>{
+      if(k >= legs.length){
+        if(dirty){
+          const slim = {};
+          legs.forEach(l=>{ if(cache[l.key]) slim[l.key] = cache[l.key]; });
+          try { localStorage.setItem(this.RKEY, JSON.stringify(slim)); } catch(_){}
+        }
+        this._roadsBusy = false;
+        return;
+      }
+      const l = legs[k];
+      if(cache[l.key]){ apply(l, cache[l.key]); step(k+1); return; }
+      if(!navigator.onLine){ step(k+1); return; }
+      fetch('https://router.project-osrm.org/route/v1/driving/'+l.a[1]+','+l.a[0]+';'+l.b[1]+','+l.b[0]+'?overview=simplified&geometries=geojson')
+        .then(r=>r.json())
+        .then(j=>{
+          const g = j && j.code==='Ok' && j.routes && j.routes[0] && j.routes[0].geometry;
+          if(g && g.coordinates && g.coordinates.length>1){
+            const pts = g.coordinates.map(c=>[Math.round(c[1]*1e5)/1e5, Math.round(c[0]*1e5)/1e5]);
+            cache[l.key] = pts; dirty = true;
+            apply(l, pts);
+          }
+          step(k+1);
+        })
+        .catch(()=>{ step(k+1); });
+    };
+    step(0);
   }
   buildMarkers(L, map){
     this.markers = [];
